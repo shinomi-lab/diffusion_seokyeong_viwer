@@ -1,0 +1,33 @@
+{
+  "name": "diffusion-live-viewer",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "wasm": "cd .. && wasm-pack build sim-wasm --target web --release --out-dir ../web/src/wasm",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "compare": "COMPARE=1 vitest run src/logic/compare.test.ts",
+    "e2e:align": "node scripts/check-alignment.mjs",
+    "e2e:p3": "node scripts/check-p3.mjs",
+    "e2e:media": "node scripts/check-media.mjs"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "uplot": "^1.6.32",
+    "zustand": "^5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "^26.6.4",
+    "@types/react": "^18.3.31",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^6.1.1",
+    "puppeteer-core": "^25.12.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

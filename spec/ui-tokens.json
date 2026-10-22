@@ -1,0 +1,24 @@
+{
+  "version": 2,
+  "theme": "dark",
+  "kinds": {
+    "0": { "name": "unreceived",  "label": "未受信",   "shape": "circle", "fill": null,      "stroke": "#6B7894", "strokeWidth": 1.5 },
+    "1": { "name": "received",    "label": "受信のみ", "shape": "circle", "fill": "#566079", "stroke": null },
+    "2": { "name": "internal",    "label": "内部活性", "shape": "circle", "fill": "#3A8EEA", "stroke": null },
+    "3": { "name": "external",    "label": "外部活性", "shape": "square", "fill": "#9EE6C4", "stroke": null },
+    "4": { "name": "both",        "label": "両方活性", "shape": "square", "fillSplit": ["#3A8EEA", "#9EE6C4"], "split": "left-right" },
+    "5": { "name": "ip",          "label": "IP",       "shape": "circle", "fill": "#22B3E6", "stroke": "#E8F7FD", "strokeWidth": 2.5, "radiusScale": 2.4 }
+  },
+  "highlight": { "currentWave": "#F2C14E", "selected": "#C9A0FF", "haloScale": 1.45 },
+  "node": { "radiusPx": 4.0 },
+  "series": { "internal": "#3A8EEA", "external": "#9EE6C4", "both": "#F2C14E", "newShare": "#3A8EEA", "newXact": "#E8506E", "cumXact": "#9EE6C4", "bandAlpha": 0.16 },
+  "rings": { "stroke": "#3A4560", "dash": [2, 5], "label": "#7D89A3" },
+  "edges": "#9FB4D9",
+  "background": "#10131A",
+  "chrome": {
+    "app": "#0B0D12", "card": "#161A23", "ui": "#1D2230", "hover": "#252B3B", "border": "#232937", "borderStrong": "#3B4458",
+    "muted": "#8D96AB", "text": "#E7EAF1", "accent": "#22B3E6", "accentSoft": "#0F2A38", "onAccent": "#06121A", "grid": "#202636",
+    "radiusCard": 12,
+    "radiusControl": 8
+  }
+}

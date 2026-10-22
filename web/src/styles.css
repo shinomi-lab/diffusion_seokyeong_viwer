@@ -1,0 +1,114 @@
+/* 色は ui-tokens.json の chrome から main.tsx（applyChromeVars）が流し込む。ここには色を直書きしない。
+   配色はダーク専用（OS がライトでもダークで表示する）。
+   方針: 中立色の段階（地・カード・部品・hover・枠線・補助文字・本文）で UI を作り、色はデータと操作できる要素だけに使う。
+   性能: backdrop-filter は使わない（毎フレーム描き直すネットワーク図の上では高い）。影は静止したパネルに小さく 1 層、影や塗りのアニメーションはしない。 */
+:root {
+  --warn: #e69f00; --err: #ff6b6b;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.35);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body, #root { height: 100%; margin: 0; }
+body { background: var(--app); color: var(--fg); font: 13px/1.5 system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", sans-serif; -webkit-font-smoothing: antialiased; }
+* { scrollbar-width: thin; scrollbar-color: var(--line-strong) transparent; }
+
+/* ボタン: 通常 = 部品の地 + 枠、hover = 色だけ変える、primary/on = アクセント */
+button { font: inherit; color: inherit; background: var(--ui); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); padding: 3px 9px; cursor: pointer; }
+button:hover:not(:disabled) { background: var(--hover); }
+button:active:not(:disabled) { transform: translateY(1px); }
+button:disabled { opacity: 0.45; cursor: not-allowed; }
+button.primary, button.on { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
+button.primary:hover:not(:disabled), button.on:hover:not(:disabled) { background: var(--accent); filter: brightness(1.08); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+input[type="number"], input[type="text"], select { font: inherit; color: inherit; background: var(--card); border: 1px solid var(--line-strong); border-radius: var(--r-ctl); padding: 2px 5px; font-variant-numeric: tabular-nums; }
+input[type="number"]:hover, input[type="text"]:hover, select:hover { border-color: var(--muted); }
+input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color: var(--accent); }
+h1 { font-size: 15px; margin: 0; letter-spacing: 0.02em; } h3 { font-size: 13px; margin: 6px 0; } h4 { font-size: 12px; margin: 8px 0 2px; color: var(--muted); }
+
+/* 11.2: 最小 1280×720。ツールバー 48px / 操作パネル 280px / ノード詳細 340px / 下段 280px */
+.app { display: grid; height: 100%; min-width: 1280px; min-height: 720px; grid-template-columns: 280px 1fr 340px; grid-template-rows: 48px 1fr 280px; grid-template-areas: "tool tool tool" "ctrl net det" "ctrl bot bot"; }
+.toolbar { grid-area: tool; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); position: relative; z-index: 3; }
+.toolbar .tools { display: flex; gap: 6px; align-items: center; flex: 1; }
+.toolbar .tools button, .toolbar .file-btn { background: transparent; border-color: transparent; }
+.toolbar .tools button:hover:not(:disabled), .toolbar .file-btn:hover { background: var(--hover); }
+.toolbar .sep { width: 1px; height: 20px; background: var(--line); margin: 0 4px; }
+.file-btn { border: 1px solid var(--line-strong); border-radius: var(--r-ctl); padding: 3px 9px; cursor: pointer; background: var(--ui); }
+.round-indicator { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+/* 操作パネル: 画面の地の上に、節ごとのカード */
+.control { grid-area: ctrl; overflow-y: auto; padding: 8px 10px; border-right: 1px solid var(--line); background: var(--app); }
+.control summary { font-weight: 600; cursor: pointer; padding: 4px 0; letter-spacing: 0.02em; }
+.control summary::marker { color: var(--accent); }
+.control details { background: var(--card); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); padding: 2px 8px 6px; margin-bottom: 8px; }
+.control .row { display: flex; align-items: center; justify-content: space-between; gap: 6px; margin: 3px 0; }
+.control .row input[type="number"] { width: 90px; }
+.control .check { display: flex; align-items: center; gap: 5px; margin: 3px 0; }
+.control fieldset.mech { border: 1px solid var(--line); border-radius: var(--r-ctl); margin: 6px 0; padding: 4px 8px; }
+.control fieldset.mech.on { border-color: var(--accent); background: var(--accent-soft); box-shadow: inset 3px 0 0 var(--accent); }
+.control legend { font-weight: 600; padding: 0 4px; }
+.slider { display: block; margin: 4px 0; }
+.slider span { display: flex; justify-content: space-between; font-size: 12px; font-variant-numeric: tabular-nums; }
+.slider input { width: 100%; }
+.presets { display: flex; gap: 4px; flex-wrap: wrap; margin-bottom: 4px; }
+.apply { display: flex; flex-direction: column; gap: 6px; margin: 8px 0; }
+.confirm { border: 2px solid var(--warn); border-radius: var(--r-ctl); padding: 6px 8px; background: var(--card); display: flex; flex-direction: column; gap: 6px; }
+.chips { display: flex; flex-wrap: wrap; gap: 5px; margin: 4px 0 8px; }
+.chip { min-width: 40px; }
+.chip.small { padding: 0 6px; font-size: 11px; }
+.send { width: 100%; padding: 8px; font-size: 15px; font-weight: 600; letter-spacing: 0.04em; box-shadow: var(--shadow); }
+.ranking { padding-left: 18px; margin: 4px 0; display: grid; grid-template-columns: 1fr 1fr; gap: 2px 8px; list-style: decimal inside; color: var(--muted); font-variant-numeric: tabular-nums; }
+.ranking li { margin: 0; } .ranking button { padding: 0 6px; color: var(--fg); }
+.ranking button.on { color: var(--on-accent); }
+.note { color: var(--muted); font-size: 12px; margin: 4px 0; } .hint { color: var(--muted); } .warn { color: var(--warn); } .warn.block { display: block; } .error { color: var(--err); }
+.badge { background: var(--accent); color: var(--on-accent); border-radius: 999px; padding: 0 6px; font-size: 11px; margin-left: 4px; }
+
+/* ネットワーク図: 地は単色（グラデーションなし）。重ね表示は不透明に近いカード（blur なし） */
+.network { grid-area: net; display: flex; flex-direction: column; min-width: 0; min-height: 0; }
+.canvas-wrap { position: relative; flex: 1; min-height: 0; overflow: hidden; background: var(--net); }
+.layer { position: absolute; inset: 0; width: 100%; height: 100%; }
+.layer.interactive { cursor: grab; touch-action: none; }
+.empty { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--muted); pointer-events: none; text-align: center; padding: 20px; }
+.expand-bar { position: absolute; top: 8px; left: 8px; display: flex; gap: 8px; align-items: center; background: color-mix(in srgb, var(--card) 96%, transparent); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); padding: 4px 6px 4px 10px; color: var(--muted); }
+.notice { position: absolute; top: 8px; left: 50%; transform: translateX(-50%); background: var(--warn); color: #fff; padding: 4px 12px; border-radius: 999px; }
+.notice.small { top: auto; bottom: 8px; background: var(--card); color: var(--muted); border: 1px solid var(--line); }
+.ring-table { position: absolute; top: 8px; left: 8px; max-height: 60%; overflow: auto; background: color-mix(in srgb, var(--card) 96%, transparent); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); font-size: 11px; font-variant-numeric: tabular-nums; }
+.ring-table table, table.mini { border-collapse: collapse; } .ring-table td, .ring-table th, table.mini td, table.mini th { padding: 1px 6px; text-align: right; border-bottom: 1px solid var(--line); }
+.ring-table th, table.mini th { color: var(--muted); font-weight: 600; }
+.ring-table th:first-child, .ring-table td:first-child { text-align: left; }
+.tooltip { position: absolute; pointer-events: none; background: var(--card); border: 1px solid var(--line); border-radius: var(--r-ctl); box-shadow: var(--shadow); padding: 3px 8px; font-size: 11px; max-width: 280px; }
+.minimap { position: absolute; right: 8px; bottom: 8px; border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); cursor: pointer; }
+.hud { position: absolute; left: 8px; bottom: 4px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.controls { border-top: 1px solid var(--line); background: var(--card); padding: 5px 10px; display: flex; flex-direction: column; gap: 4px; }
+.legend { display: flex; gap: 12px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.legend-item { display: inline-flex; align-items: center; gap: 4px; } .legend-item i { display: inline-block; width: 12px; height: 12px; }
+.playbar { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.wave-label { min-width: 90px; font-variant-numeric: tabular-nums; color: var(--muted); }
+.int-mode { margin-left: auto; color: var(--muted); }
+
+.detail { grid-area: det; overflow-y: auto; border-left: 1px solid var(--line); background: var(--card); padding: 8px 10px; }
+.tabs { display: flex; gap: 4px; margin-bottom: 6px; }
+.detail-body .row { display: flex; gap: 8px; align-items: center; margin: 4px 0; }
+.kv { display: grid; grid-template-columns: auto 1fr; gap: 2px 8px; margin: 4px 0; font-variant-numeric: tabular-nums; } .kv dt { color: var(--muted); } .kv dd { margin: 0; }
+table.mini { width: 100%; font-size: 11px; margin: 6px 0; font-variant-numeric: tabular-nums; }
+.plot { width: 100%; }
+.u-legend { font-size: 11px; color: var(--muted); }
+
+.bottom { grid-area: bot; display: grid; grid-template-columns: 2fr 1fr; border-top: 1px solid var(--line); min-height: 0; overflow: hidden; background: var(--card); }
+.round-chart { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 6px 10px; overflow: hidden; }
+.round-chart h3, .branch h3 { letter-spacing: 0.02em; }
+.chart-col { min-width: 0; }
+.branch { border-left: 1px solid var(--line); padding: 6px 10px; overflow-y: auto; background: var(--card); }
+.seq { font: 600 18px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 3px; margin: 4px 0; }
+.chain { display: flex; flex-wrap: wrap; gap: 4px; }
+
+/* P3: 分岐ツリー・MC・比較 */
+.tree-scroll { overflow: auto; max-height: 120px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--app); margin: 4px 0; }
+.tree-node { cursor: pointer; }
+.tree-node:hover circle { stroke: var(--warn); }
+.mc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.views { flex: 1; display: flex; gap: 2px; min-height: 0; min-width: 0; background: var(--line); }
+.views .canvas-wrap { flex: 1; min-width: 0; }
+.slot-label { position: absolute; top: 8px; right: 8px; z-index: 2; background: var(--accent); color: var(--on-accent); border-radius: 999px; padding: 0 10px; font-weight: 700; pointer-events: none; box-shadow: var(--shadow); }
+.plot-wrap { position: relative; }
+.plot-actions { position: absolute; top: -26px; right: 0; display: flex; gap: 4px; }
+.plot-actions button { padding: 0 6px; font-size: 11px; }

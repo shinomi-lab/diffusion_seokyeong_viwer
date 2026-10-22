@@ -1,0 +1,140 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<title>配色改良計画（ダーク・ネットワークダッシュボード風）</title>
+<style>
+  @page { size: A4 landscape; margin: 14mm 14mm 12mm; }
+  :root { --bg:#10131A; --card:#161A23; --line:#232937; --text:#1A2230; --muted:#5B6573; --accent:#22B3E6; }
+  * { box-sizing: border-box; }
+  body { font: 10.5pt/1.6 "Hiragino Sans", "Hiragino Kaku Gothic ProN", "Noto Sans JP", system-ui, sans-serif; color: var(--text); margin: 0; }
+  h1 { font-size: 20pt; margin: 0 0 2mm; letter-spacing: .02em; }
+  h2 { font-size: 13.5pt; margin: 0 0 3mm; padding-left: 3mm; border-left: 4px solid var(--accent); }
+  h3 { font-size: 11pt; margin: 4mm 0 1.5mm; }
+  p, li { margin: 0 0 1.4mm; }
+  ul { margin: 0 0 2mm; padding-left: 5mm; }
+  .page { page-break-after: always; }
+  .page:last-child { page-break-after: auto; }
+  .sub { color: var(--muted); font-size: 10pt; }
+  .cover { background: var(--bg); color: #E7EAF1; border-radius: 10px; padding: 6mm 9mm; margin-bottom: 4mm; }
+  .cover .sub { color: #8D96AB; }
+  .cover b { color: #22B3E6; }
+  .shot { width: 100%; border-radius: 8px; border: 1px solid #D5DAE1; display: block; }
+  .cap { font-size: 9pt; color: var(--muted); margin: 1.5mm 0 3mm; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 6mm; }
+  table { border-collapse: collapse; width: 100%; font-size: 9.5pt; margin: 1mm 0 3mm; }
+  th, td { border-bottom: 1px solid #E1E5EA; padding: 1.4mm 2mm; text-align: left; vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; background: #F6F7F9; }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  .sw { display: inline-block; width: 11mm; height: 6mm; border-radius: 3px; vertical-align: middle; border: 1px solid rgba(0,0,0,.12); margin-right: 2mm; }
+  code { font-family: "SF Mono", Menlo, monospace; font-size: 9pt; background: #F1F3F6; padding: 0 1mm; border-radius: 2px; }
+  .board { background: var(--bg); border-radius: 10px; padding: 6mm; color: #E7EAF1; display: grid; grid-template-columns: repeat(4, 1fr); gap: 4mm; }
+  .chip { background: var(--card); border: 1px solid var(--line); border-radius: 8px; padding: 3mm; }
+  .chip i { display: block; height: 12mm; border-radius: 5px; margin-bottom: 2mm; }
+  .chip b { display: block; font-size: 9.5pt; }
+  .chip span { font: 8.5pt "SF Mono", Menlo, monospace; color: #8D96AB; }
+  .note { background: #FFF8E6; border: 1px solid #F2D58A; border-radius: 6px; padding: 2.5mm 3.5mm; font-size: 9.5pt; }
+  .ok { color: #0B7A55; font-weight: 600; }
+  .steps li { margin-bottom: 1.8mm; }
+</style>
+</head>
+<body>
+
+<!-- 1 ページ目: 概要と試作 -->
+<section class="page">
+  <div class="cover">
+    <h1>配色改良計画 — ダーク・ネットワークダッシュボード風</h1>
+    <div class="sub">情報拡散ライブビューア（Web・デスクトップ）／ 2026-10-04 ／ 試作と実装計画</div>
+    <p style="margin-top:4mm">参照: Dribbble「Policy Network Dashboard UI Design」（Lina Ghimp）。紺寄りの暗い地、一段明るいパネル、くすんだ多色のノード、<b>シアンのアクセント</b>、面グラフの塗り。<br>
+    <b>配置・寸法・文言・操作は変えず、彩色だけ</b>を参照に寄せる。データの色は色覚の違いでも区別できる値に調整する。</p>
+  </div>
+  <img class="shot" src="prototype_dark.png" style="width:74%;margin:0 auto">
+  <div class="cap" style="text-align:center">図 1　試作（実際の Web 版を作業用コピーで動かし、配色だけを差し替えて撮影。100random、IP = ノード 8、11 ラウンド発信後）。本体のソースは未変更。</div>
+</section>
+
+<!-- 2 ページ目: 現在との比較 -->
+<section class="page">
+  <h2>現在との比較</h2>
+  <div class="grid2">
+    <div><img class="shot" src="current_dark.png"><div class="cap">図 2a　現在（落ち着いた研究ツール風・ダーク）。データの色は Okabe–Ito。</div></div>
+    <div><img class="shot" src="prototype_dark.png"><div class="cap">図 2b　試作。地を紺寄りの黒に、アクセントをシアンに、ノード・系列を参照の色調に。</div></div>
+  </div>
+  <img class="shot" src="prototype_dark_compare.png" style="width:46%;margin:0 auto">
+  <div class="cap" style="text-align:center">図 3　試作の 2 画面比較（A・B）。B の破線、ミニマップ、分岐ツリーも同じ配色規則。</div>
+</section>
+
+<!-- 3 ページ目: 配色 -->
+<section class="page">
+  <h2>配色の定義（ui-tokens.json に入れる値）</h2>
+  <div class="board">
+    <div class="chip"><i style="background:#3A8EEA"></i><b>内部活性・新規シェア</b><span>#3A8EEA（青）</span></div>
+    <div class="chip"><i style="background:#9EE6C4"></i><b>外部活性・累積外部行動</b><span>#9EE6C4（ミント）</span></div>
+    <div class="chip"><i style="background:#E8506E"></i><b>新規外部行動</b><span>#E8506E（ローズ）</span></div>
+    <div class="chip"><i style="background:#F2C14E"></i><b>MC・両方の系列／現在のウェーブ</b><span>#F2C14E（マスタード）</span></div>
+    <div class="chip"><i style="background:#22B3E6"></i><b>IP・UI のアクセント</b><span>#22B3E6（シアン）＋縁 #E8F7FD</span></div>
+    <div class="chip"><i style="background:#566079"></i><b>受信のみ</b><span>#566079（スレート）</span></div>
+    <div class="chip"><i style="background:transparent;border:2px solid #6B7894"></i><b>未受信（輪）</b><span>#6B7894</span></div>
+    <div class="chip"><i style="background:#C9A0FF"></i><b>選択中のノード</b><span>#C9A0FF（ラベンダー）</span></div>
+  </div>
+  <h3>UI の枠（ダーク）</h3>
+  <table>
+    <tr><th>役割</th><th>色</th><th>役割</th><th>色</th></tr>
+    <tr><td><span class="sw" style="background:#0B0D12"></span>画面の地</td><td><code>#0B0D12</code></td><td><span class="sw" style="background:#10131A"></span>ネットワーク図の地</td><td><code>#10131A</code></td></tr>
+    <tr><td><span class="sw" style="background:#161A23"></span>カード・パネル</td><td><code>#161A23</code></td><td><span class="sw" style="background:#1D2230"></span>部品の地</td><td><code>#1D2230</code></td></tr>
+    <tr><td><span class="sw" style="background:#232937"></span>枠線</td><td><code>#232937</code></td><td><span class="sw" style="background:#3A4560"></span>輪（ホップ）</td><td><code>#3A4560</code>（ラベル <code>#7D89A3</code>）</td></tr>
+    <tr><td><span class="sw" style="background:#E7EAF1"></span>本文</td><td><code>#E7EAF1</code></td><td><span class="sw" style="background:#8D96AB"></span>補助文字</td><td><code>#8D96AB</code></td></tr>
+    <tr><td><span class="sw" style="background:#9FB4D9"></span>辺（不透明度は既存の規則）</td><td><code>#9FB4D9</code></td><td><span class="sw" style="background:#0F2A38"></span>アクセントの淡色</td><td><code>#0F2A38</code></td></tr>
+  </table>
+  <p class="sub">角丸はカード 12px・部品 8px（デスクトップの部品は 4px のまま。チェックボックスが円に見えるため）。時系列の実線の系列は、線の色から透明への縦グラデーションでグラフの底まで淡く塗る（面グラフ風）。</p>
+</section>
+
+<!-- 4 ページ目: 検証 -->
+<section class="page">
+  <h2>見やすさの検証（計算済み）</h2>
+  <h3>色覚の違いのシミュレーション（Machado 2009、CIELAB の色差 ΔE。目安 20 以上で区別しやすい）</h3>
+  <table>
+    <tr><th>同じ図に並ぶ色の組</th><th class="num">通常</th><th class="num">第一色覚</th><th class="num">第二色覚</th><th class="num">第三色覚</th></tr>
+    <tr><td>人数グラフ（新規シェア・新規外部行動・累積外部行動・MC）</td><td class="num">27</td><td class="num">41</td><td class="num">29</td><td class="num">28</td></tr>
+    <tr><td>効用グラフ（内部・外部）</td><td class="num">77</td><td class="num">69</td><td class="num">71</td><td class="num">28</td></tr>
+    <tr><td>ノード（受信のみ・内部・外部・新規外部）</td><td class="num">42</td><td class="num">19</td><td class="num">29</td><td class="num">28</td></tr>
+  </table>
+  <p>表は各グループの<b>最小</b>の色差。参照の色そのまま（シアン・ミント・ローズ）では、第二色覚でミントとローズが ΔE 9、第三色覚でシアンとミントが ΔE 11 と区別しにくかった。<b>明るさに差をつける</b>（ミントを明るく、ローズと青を中くらいに）ことで改善した。ノードは形（円・四角）でも区別できる。</p>
+  <h3>背景（#10131A）に対するコントラスト（WCAG）</h3>
+  <table>
+    <tr><th>色</th><th class="num">比</th><th>色</th><th class="num">比</th></tr>
+    <tr><td>内部 #3A8EEA</td><td class="num">5.5</td><td>外部 #9EE6C4</td><td class="num">12.9</td></tr>
+    <tr><td>新規外部 #E8506E</td><td class="num">5.1</td><td>マスタード #F2C14E</td><td class="num">11.1</td></tr>
+    <tr><td>受信のみ #566079</td><td class="num">3.0</td><td>未受信の輪 #6B7894</td><td class="num">4.2</td></tr>
+  </table>
+  <p class="sub">グラフ要素の目安 3:1（IBM Carbon・WCAG 1.4.11）をすべて満たす。本文・補助文字は前回の改良で 4.5:1 以上を確認済み。</p>
+  <div class="note"><b>注意:</b> 参照はダーク専用のデザイン。ライトモードでは同じデータ色だと淡すぎる（ミント #9EE6C4 は白地で 1.4:1）。ライト用には同じ色相で暗くした値（内部 #1F6FC6・外部 #1E9E72・新規外部 #C8334F・マスタード #B8860B）を別に持たせる。そのため <code>kinds</code>・<code>series</code> の色をライト／ダークの 2 組にする（下記の手順 1）。</div>
+</section>
+
+<!-- 5 ページ目: 実装計画 -->
+<section class="page">
+  <h2>実装計画</h2>
+  <ol class="steps">
+    <li><b>トークンの拡張</b>（<code>spec/ui-tokens.json</code>）: <code>kinds</code>・<code>highlight</code>・<code>series</code> に <code>dark</code> の組を追加（<code>fill</code> / <code>fillDark</code> のように対で持つ）。<code>chrome.dark</code>・<code>background.dark</code>・<code>rings</code>・<code>edges</code> を上の値に。読み込み側（<code>web/src/tokens.ts</code>・<code>desktop/src/tokens.rs</code>）はテーマに応じて選ぶ関数を 1 つ用意し、色を使う所はそれを通す。</li>
+    <li><b>既定のテーマ</b>: OS の設定に従う（現状どおり）。ダークで参照の雰囲気、ライトは同じ規則の濃い色。</li>
+    <li><b>Web</b>: WebGL の色（<code>render/gl.ts</code>）、Canvas の重ね描き（<code>render/overlay.ts</code>）、ミニマップ・凡例（<code>NetworkView.tsx</code>）、時系列（<code>panels/Plot.tsx</code>: 実線の系列に縦グラデーションの塗り、<code>fillTo</code> = グラフの底）、分岐ツリー（<code>SeriesPanel.tsx</code>）。テーマ切替で WebGL の色を送り直す。</li>
+    <li><b>デスクトップ</b>: <code>gpu/mod.rs</code> の Uniforms にテーマ別の色、<code>panels/charts.rs</code>・<code>detail.rs</code> の系列色、<code>panels/legend.rs</code> の凡例、<code>panels/network.rs</code> の輪・選択色、<code>theme.rs</code> のアクセント。egui_plot には面の塗りがあるので（<code>Line::fill</code>）、同じ面グラフ風にする。</li>
+    <li><b>書き出し</b>: PNG・録画は画面と同じ配色。SVG（<code>logic/svg.ts</code>・<code>desktop/src/svg.rs</code>）は資料用の白地とライトの色のまま（印刷・論文向け）。</li>
+    <li><b>テスト・確認</b>: 実 GPU のピクセル検証（<code>cargo test -p desktop</code>）と、Web の位置合わせ（<code>npm run e2e:align</code>）は色の判定をトークンから取るよう直す。<code>npm run e2e:p3</code>・<code>e2e:media</code>、前後のスクリーンショット（ライト／ダーク、通常／比較）、色覚シミュレーションの再計算、<code>--bench</code> とフレーム時間の比較。</li>
+  </ol>
+  <h3>性能への配慮</h3>
+  <ul>
+    <li>色の値を変えるだけで、描画の処理（頂点数・パス数・シェーダ）は増えない。</li>
+    <li>面グラフの塗りは時系列グラフ（数十点）だけで、ネットワーク図には付けない。ノードの光彩（参照の柔らかい光）は、毎フレームのぼかしが重いので<b>入れない</b>。代わりに IP だけ白い縁を付けて目立たせる。</li>
+    <li><code>backdrop-filter</code>（すりガラス）は引き続き使わない。</li>
+  </ul>
+  <h3>変えないもの</h3>
+  <p>配置・パネル寸法・文言・操作・ノードの形と大きさ・凡例の項目・既存のテストの判定内容。</p>
+  <h3>判断が必要な点</h3>
+  <ul>
+    <li>データの色を Okabe–Ito から変えることになる（要件の「色覚に配慮した配色」は上の検証で満たす）。設計書の 11.1 の色表を更新する。</li>
+    <li>ライトモードも参照の色調（濃い版）に揃えるか、ライトは現在の Okabe–Ito のまま残すか。</li>
+  </ul>
+</section>
+
+</body>
+</html>

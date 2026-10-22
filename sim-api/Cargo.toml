@@ -1,0 +1,25 @@
+[package]
+name = "sim-api"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+sim-core     = { package = "core", path = "../core" }   # INV-08: 名前を変えて依存する
+graph-lib    = { workspace = true }                     # alg feature は有効にしない（rayon が入る）
+rand         = { workspace = true }
+rand_xoshiro = "0.7"
+rand_distr   = { workspace = true }
+serde        = { workspace = true, features = ["derive"] }
+serde_json   = "1"
+toml         = "0.9"
+flate2       = "1"
+approx       = "0.5"
+libm         = "0.2"
+thiserror    = "2"
+
+[dev-dependencies]
+runner = { path = "../runner" }
+
+# wasm32 でのビルド用（設計書 6.2。sim-wasm を作るまではここに置いて検証する）
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+getrandom = { version = "0.3", features = ["wasm_js"] }

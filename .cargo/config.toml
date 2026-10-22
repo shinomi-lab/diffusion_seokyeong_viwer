@@ -1,0 +1,3 @@
+# wasm32 では getrandom（rand が引く）の裏方（バックエンド）を明示しないとコンパイルできない（設計書 6.2）。
+[target.wasm32-unknown-unknown]
+rustflags = ["--cfg", 'getrandom_backend="wasm_js"']

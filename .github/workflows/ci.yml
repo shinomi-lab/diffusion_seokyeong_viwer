@@ -1,0 +1,23 @@
+name: ci
+on: [push, pull_request]
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+          components: clippy, rustfmt
+      - run: cargo fmt -p sim-api -p sim-wasm --check
+      - run: cargo clippy -p sim-api -p sim-wasm --no-deps -- -D warnings
+      # desktop は GPU と OS のライブラリが要るので CI の Linux では除く（手元の Mac で cargo test -p desktop）
+      - run: cargo test --workspace --release --exclude desktop
+      - run: cargo build -p sim-api --target wasm32-unknown-unknown
+      - uses: jetli/wasm-pack-action@v0.4.0
+      - run: wasm-pack test --node sim-wasm
+      - run: wasm-pack build sim-wasm --target web --release --out-dir ../web/src/wasm
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: cd web && npm ci && npm run build && npm test

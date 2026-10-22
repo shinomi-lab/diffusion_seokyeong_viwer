@@ -1,0 +1,12 @@
+# comment
+  # comment after spaces
+# blank & whitespace only lines
+
+% other type of comment
+
+0 1
+# internal comment
+0 2 % right hand side comment
+1	3 # using tab character
+2 3
+# last comment
