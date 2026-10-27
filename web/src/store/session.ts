@@ -20,6 +20,8 @@ interface SessionState {
   busy: boolean;
   error: string | null;
   specs: ParamSpec[];
+  /** 推薦のスライダーの登録簿。 */
+  recSpecs: ParamSpec[];
   /** 編集中の設定（適用するまで計算には反映されない）。 */
   form: ScenarioForm;
   /** 適用済みの設定の JSON（編集中との差で「未適用」を判定する）。 */
@@ -74,6 +76,16 @@ const parse = <T,>(s: string) => JSON.parse(s) as T;
 /** 系列文字列の 1 文字 → 選択。 */
 const choiceNum = (c: string) => parseInt(c, 16);
 
+/** 適用済みのシナリオで推薦が on か。 */
+export const recOn = (s: { scenario: ScenarioInfo | null }): boolean =>
+  ((s.scenario?.config as { recommender?: { enabled?: boolean } } | undefined)?.recommender?.enabled ?? false) === true;
+
+/** 適用済みのシナリオで、推薦が on かつ方式が CF＋グラフか。 */
+export const recHybrid = (s: { scenario: ScenarioInfo | null }): boolean =>
+  recOn(s) && (s.scenario?.config as { recommender?: { method?: string } }).recommender?.method === 'hybrid';
+export const recWave = (s: { scenario: ScenarioInfo | null }): boolean =>
+  recOn(s) && (s.scenario?.config as { recommender?: { method?: string } }).recommender?.method === 'wave';
+
 /** 比較（F13）の A = スロット 0、B = スロット 1。スロットごとに別の Simulator（Worker 内）を使う。 */
 export function createSessionStore(slot: 0 | 1) {
   const call = <K extends OpName>(op: K, args: Ops[K]['args']): Promise<Ops[K]['res']> => sim.call(op, args, [], slot);
@@ -107,6 +119,7 @@ export function createSessionStore(slot: 0 | 1) {
     busy: false,
     error: null,
     specs: [],
+    recSpecs: [],
     form: defaultForm([]),
     appliedJson: '',
     graphOpts: { ...DEFAULT_GRAPH_OPTS },
@@ -119,7 +132,8 @@ export function createSessionStore(slot: 0 | 1) {
 
     async init() {
       const specs = parse<ParamSpec[]>(await call('paramSpecs', {}));
-      set({ specs, form: defaultForm(specs), ready: true });
+      const recSpecs = parse<ParamSpec[]>(await call('recParamSpecs', {}));
+      set({ specs, recSpecs, form: defaultForm(specs), ready: true });
     },
 
     setForm(patch) {

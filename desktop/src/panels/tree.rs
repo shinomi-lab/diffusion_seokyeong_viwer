@@ -143,14 +143,22 @@ impl App {
                                 "初期状態（ラウンド 0）".to_string()
                             } else {
                                 format!(
-                                    "ラウンド {}: m{}（累積外部 {}）",
+                                    "ラウンド {}: m{}（累積外部 {}{}）",
                                     n.round,
                                     if n.choice == "-" {
                                         "∅".to_string()
                                     } else {
                                         n.choice.clone()
                                     },
-                                    n.cum_xact
+                                    n.cum_xact,
+                                    if n.cum_rec > 0 {
+                                        format!(
+                                            "、推薦で受信 {}・累積 {}",
+                                            n.rec_received, n.cum_rec
+                                        )
+                                    } else {
+                                        String::new()
+                                    }
                                 )
                             };
                             if resp.on_hover_text(tip).clicked() {
@@ -242,6 +250,8 @@ mod tests {
             lane,
             n_received: 0,
             cum_xact: 0,
+            rec_received: 0,
+            cum_rec: 0,
         }
     }
 

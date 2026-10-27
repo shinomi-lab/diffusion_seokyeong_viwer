@@ -651,6 +651,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.9919152,
@@ -667,15 +668,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 0
         },
+        "cum_rec": 0,
         "cum_xact": 0,
         "n_int_active_now": 0,
         "n_received": 4,
         "n_share": 0,
         "n_waves": 1,
         "new_xact": 0,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.39566404,
           "mean_int": -0.42774612,
@@ -1329,6 +1336,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.99000376,
@@ -1345,15 +1353,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 5
         },
+        "cum_rec": 0,
         "cum_xact": 1,
         "n_int_active_now": 0,
         "n_received": 2,
         "n_share": 0,
         "n_waves": 1,
         "new_xact": 1,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.25278246,
           "mean_int": -0.3180373,
@@ -2049,6 +2063,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.9799352,
@@ -2065,15 +2080,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 2
         },
+        "cum_rec": 0,
         "cum_xact": 1,
         "n_int_active_now": 1,
         "n_received": 8,
         "n_share": 1,
         "n_waves": 2,
         "new_xact": 0,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.2500781,
           "mean_int": -0.27103773,
@@ -2762,6 +2783,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.9754208,
@@ -2778,15 +2800,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 2
         },
+        "cum_rec": 0,
         "cum_xact": 1,
         "n_int_active_now": 1,
         "n_received": 7,
         "n_share": 1,
         "n_waves": 2,
         "new_xact": 0,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.08135193,
           "mean_int": -0.08390343,
@@ -3496,6 +3524,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.9651789,
@@ -3512,15 +3541,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 4
         },
+        "cum_rec": 0,
         "cum_xact": 5,
         "n_int_active_now": 3,
         "n_received": 10,
         "n_share": 3,
         "n_waves": 3,
         "new_xact": 4,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.13237388,
           "mean_int": -0.16808565,
@@ -4265,6 +4300,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.94739217,
@@ -4281,15 +4317,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 1
         },
+        "cum_rec": 0,
         "cum_xact": 5,
         "n_int_active_now": 5,
         "n_received": 15,
         "n_share": 5,
         "n_waves": 3,
         "new_xact": 0,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.28501132,
           "mean_int": -0.25106737,
@@ -4957,6 +4999,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.9445056,
@@ -4973,15 +5016,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 3
         },
+        "cum_rec": 0,
         "cum_xact": 6,
         "n_int_active_now": 2,
         "n_received": 4,
         "n_share": 2,
         "n_waves": 2,
         "new_xact": 1,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.27857262,
           "mean_int": -0.2439629,
@@ -5614,6 +5663,7 @@
         0,
         0
       ],
+      "rec_sim": [],
       "summary": {
         "all": {
           "mean_ext": -0.9445056,
@@ -5630,15 +5680,21 @@
             -1.0
           ]
         },
+        "chain_received": 0,
+        "chain_xact": 0,
         "choice": {
           "Msg": 0
         },
+        "cum_rec": 0,
         "cum_xact": 6,
         "n_int_active_now": 0,
         "n_received": 0,
         "n_share": 0,
         "n_waves": 1,
         "new_xact": 0,
+        "rec_received": 0,
+        "rec_share": 0,
+        "rec_xact": 0,
         "recv": {
           "mean_ext": -0.27857262,
           "mean_int": -0.2439629,

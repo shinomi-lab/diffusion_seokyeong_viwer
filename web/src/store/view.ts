@@ -24,6 +24,8 @@ interface ViewState {
   tab: DetailTab;
   /** 0 = 累積、1 = このラウンドのみ（F07）。 */
   intMode: 0 | 1;
+  /** 推薦で受信の色: 0 = 累積（一度でも推薦で受け取った人）、1 = このラウンドのみ。 */
+  recMode: 0 | 1;
   camera: Camera;
   /** 描画する辺が上限で打ち切られたか。 */
   edgesTruncated: boolean;
@@ -36,6 +38,7 @@ interface ViewState {
   setGroup(nodes: Uint32Array | null): void;
   setTab(t: DetailTab): void;
   setIntMode(m: 0 | 1): void;
+  setRecMode(m: 0 | 1): void;
   setCamera(c: Camera): void;
   setEdgesTruncated(v: boolean): void;
   setNotice(s: string | null): void;
@@ -51,6 +54,7 @@ export const useView = create<ViewState>((set) => ({
   groupNodes: null,
   tab: 'node',
   intMode: 0,
+  recMode: 0,
   camera: { cx: 0, cy: 0, zoom: 30 },
   edgesTruncated: false,
   notice: null,
@@ -63,6 +67,7 @@ export const useView = create<ViewState>((set) => ({
   setGroup: (nodes) => set({ groupNodes: nodes, ...(nodes ? { tab: 'group' as const } : {}) }),
   setTab: (tab) => set({ tab }),
   setIntMode: (intMode) => set({ intMode }),
+  setRecMode: (recMode) => set({ recMode }),
   setCamera: (camera) => set({ camera }),
   setEdgesTruncated: (edgesTruncated) => set({ edgesTruncated }),
   setNotice: (notice) => set({ notice }),

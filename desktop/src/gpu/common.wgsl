@@ -14,5 +14,8 @@ struct U {
   fill: array<vec4<f32>, 6>,
   stroke: array<vec4<f32>, 6>,
   kind: array<vec4<f32>, 6>,  // x = 半径の倍率, y = 縁の太さ（半径に対する割合。0 なら縁なし）
+  rec_color: vec4<f32>,
+  chain_color: vec4<f32>,
+  rec_ring: vec4<f32>,        // x = 推薦で受信した内部活性の人の青い縁取りの太さ（ポイント）
 };
 @group(0) @binding(0) var<uniform> u: U;

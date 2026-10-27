@@ -1,5 +1,6 @@
 //! ノード別イベントの Parquet（7.13）。`sim-api` は Parquet を作らない（INV-10）ので、ここで行に変換する。
-//! 列: round, wave, node, node_label, from, from_label, u_int, u_ext, kind。既存の Python（Polars / pyarrow）で読める。
+//! 列: round, wave, node, node_label, from, from_label, u_int, u_ext, kind, via。既存の Python（Polars / pyarrow）で読める。
+//! 推薦で受信した行は from = u32::MAX、from_label = -1、via = "rec"（CSV と同じ）。
 
 use std::fs::File;
 use std::path::Path;
@@ -10,14 +11,15 @@ use arrow_schema::{DataType, Field, Schema};
 use parquet::arrow::ArrowWriter;
 use parquet::basic::{Compression, ZstdLevel};
 use parquet::file::properties::WriterProperties;
-use sim_api::log::{IntMode, kind_of};
+use sim_api::engine::FROM_REC;
+use sim_api::log::{EV_REC, EV_RECCHAIN, IntMode, kind_of};
 use sim_api::session::Session;
 
 pub fn write_events_parquet(path: &Path, s: &Session) -> Result<usize, String> {
     let labels = &s.scenario().graph.labels;
     let (mut round, mut wave, mut node, mut node_label, mut from, mut from_label) =
         (vec![], vec![], vec![], vec![], vec![], vec![]);
-    let (mut u_int, mut u_ext, mut kind) = (vec![], vec![], vec![]);
+    let (mut u_int, mut u_ext, mut kind, mut via) = (vec![], vec![], vec![], vec![]);
     for r in 1..=s.round() {
         let ev = s.event_columns(r).ok_or("イベントがありません")?;
         let flags = s.log().row_flags(r as usize);
@@ -28,7 +30,18 @@ pub fn write_events_parquet(path: &Path, s: &Session) -> Result<usize, String> {
             node.push(ev.node[k]);
             node_label.push(labels[n]);
             from.push(ev.from[k]);
-            from_label.push(labels[ev.from[k] as usize]);
+            from_label.push(if ev.from[k] == FROM_REC {
+                -1
+            } else {
+                labels[ev.from[k] as usize]
+            });
+            via.push(if ev.flags[k] & EV_REC != 0 {
+                "rec"
+            } else if ev.flags[k] & EV_RECCHAIN != 0 {
+                "rec_chain"
+            } else {
+                "follow"
+            });
             u_int.push(ev.u_int[k]);
             u_ext.push(ev.u_ext[k]);
             kind.push(
@@ -49,6 +62,7 @@ pub fn write_events_parquet(path: &Path, s: &Session) -> Result<usize, String> {
         Field::new("u_int", DataType::Float32, false),
         Field::new("u_ext", DataType::Float32, false),
         Field::new("kind", DataType::Utf8, false),
+        Field::new("via", DataType::Utf8, false),
     ]));
     let cols: Vec<ArrayRef> = vec![
         Arc::new(UInt32Array::from(round)),
@@ -60,6 +74,7 @@ pub fn write_events_parquet(path: &Path, s: &Session) -> Result<usize, String> {
         Arc::new(Float32Array::from(u_int)),
         Arc::new(Float32Array::from(u_ext)),
         Arc::new(StringArray::from(kind)),
+        Arc::new(StringArray::from(via)),
     ];
     let batch = RecordBatch::try_new(schema.clone(), cols).map_err(|e| e.to_string())?;
     let props = WriterProperties::builder()
@@ -138,7 +153,8 @@ mod tests {
                 "from_label",
                 "u_int",
                 "u_ext",
-                "kind"
+                "kind",
+                "via"
             ]
         );
         std::fs::remove_dir_all(&dir).ok();

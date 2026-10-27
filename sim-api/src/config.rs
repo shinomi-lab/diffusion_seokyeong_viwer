@@ -215,6 +215,105 @@ impl MechanismConfig {
     }
 }
 
+/// 推薦（`recommender-design.md` 5 章）。拡張機構とは別の設定。既定は off（現行モデル）。
+/// 推薦の方式（`recommender-v2-design.md` 5 章）。
+#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "lowercase")]
+pub enum RecMethod {
+    /// 基準（v1）: 本人の同じ種類の反応率を全体の率に寄せる。
+    Baseline,
+    /// CF＋グラフ（v2）: アイテムベースの協調フィルタリングと社会的証明の重み付きの和。
+    Hybrid,
+    /// Rモデル（v3、`recommender-v3-design.md`）: 各ウェーブのあとに、反応率に応じた数だけフォロー外へ押し出す。
+    Wave,
+}
+
+impl RecMethod {
+    /// キーが無い古い記録（v1 で保存）は基準として読む。
+    // 仮定: 古い記録の再現性を優先し、キーが無いときと既定値（Hybrid）を分ける（D-V4）。
+    fn legacy() -> Self {
+        Self::Baseline
+    }
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(default)]
+pub struct RecommenderConfig {
+    pub enabled: bool,
+    #[serde(default = "RecMethod::legacy")]
+    pub method: RecMethod,
+    /// 閾値 θ。スコアがこれ以上の人に推薦する。
+    // 仮定: U-R1。既定 0.15 は仮置き（3 水準の比較で決める）。
+    pub threshold: f64,
+    /// シェアの重み w_s。外部行動の重みは 1 − w_s。
+    pub w_share: f64,
+    /// 平滑化の強さ（基準では n₀、CF＋グラフでは λ）。
+    pub prior_n0: f64,
+    /// CF の比率 α（1 で CF だけ、0 でグラフだけ）。
+    pub alpha: f64,
+    /// 種類どうしの似かたを計算する最小の共通受信者数 c。
+    pub min_common: u32,
+    /// Rモデル: 推薦の強さ ε（0 で推薦なし）。
+    pub eps: f64,
+    /// Rモデル: フォロー外の露出の割引 δ（1 で割引なし）。
+    pub delta: f64,
+    /// Rモデル: 近くへの推薦 θ（2 歩先へ配る確率）。v1 の閾値 θ（`threshold`）とは別物。
+    pub near: f64,
+    /// Rモデル: しきい値 τ（反応率が基準の何倍で推薦するか）。
+    pub tau: f64,
+    /// Rモデル: 推薦量の倍率の上限 φ_max。
+    pub phi_max: f64,
+    /// Rモデル: 擬似カウント k（事前分布の強さ）。
+    pub k: f64,
+    /// Rモデル: アカウント記憶の持続 μ（R3。1 で記憶なし）。
+    pub mu: f64,
+}
+
+impl Default for RecommenderConfig {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            method: RecMethod::Hybrid,
+            threshold: 0.15,
+            w_share: 0.5,
+            prior_n0: 2.0,
+            alpha: 0.5,
+            min_common: 5,
+            // 仮定: U-W1。Rモデルの既定値は仮置き（参照実装 diffusion_seokyeong と同じ）。
+            eps: 1.0,
+            delta: 1.0,
+            near: 0.5,
+            tau: 0.0,
+            phi_max: 3.0,
+            k: 10.0,
+            mu: 1.0,
+        }
+    }
+}
+
+impl RecommenderConfig {
+    fn validate(&self) -> Result<(), ConfigError> {
+        for &spec in params::rec_param_specs() {
+            let v = params::get_rec_value(self, spec.id).unwrap_or(0.0);
+            if let (Some(lo), Some(hi)) = (spec.min, spec.max)
+                && !(lo..=hi).contains(&v)
+            {
+                return err(format!(
+                    "{} は {lo}〜{hi} の範囲である必要があります (実際: {v})",
+                    spec.id
+                ));
+            }
+        }
+        if self.phi_max < self.tau {
+            return err(format!(
+                "rec.phi_max は rec.tau 以上である必要があります (phi_max = {}, tau = {})",
+                self.phi_max, self.tau
+            ));
+        }
+        Ok(())
+    }
+}
+
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(default)]
 pub struct ScenarioConfig {
@@ -230,6 +329,8 @@ pub struct ScenarioConfig {
     pub user_index: u32,
     pub diffusion_seed: u64,
     pub mechanisms: MechanismConfig,
+    /// 推薦（古い記録にはキーが無く、off として読める）。
+    pub recommender: RecommenderConfig,
 }
 
 fn default_messages() -> Vec<MessageSpec> {
@@ -261,6 +362,7 @@ impl Default for ScenarioConfig {
             user_index: 0,
             diffusion_seed: 0,
             mechanisms: MechanismConfig::off(),
+            recommender: RecommenderConfig::default(),
         }
     }
 }
@@ -322,6 +424,7 @@ impl ScenarioConfig {
         self.external_parameters
             .validate("external_parameters", me)?;
         self.mechanisms.validate()?;
+        self.recommender.validate()?;
         if let Some(n) = n_nodes {
             let bytes = n as u64 * (self.max_rounds as u64 + 1) * LOG_BYTES_PER_NODE_ROUND;
             if bytes > LOG_LIMIT_BYTES {

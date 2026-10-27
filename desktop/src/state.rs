@@ -57,6 +57,8 @@ pub struct View {
     pub tab: Tab,
     pub group_kind: GroupKind,
     pub int_mode: IntMode,
+    /// 推薦で受信の色を累積で残すか（false = このラウンドのみ）。
+    pub rec_cumulative: bool,
     pub camera: Camera,
     pub notice: Option<String>,
     /// カメラをノード集合に合わせ直す（次のフレームで、実際の大きさが分かってから）。
@@ -75,6 +77,7 @@ impl Default for View {
             tab: Tab::Node,
             group_kind: GroupKind::Both,
             int_mode: IntMode::Cumulative,
+            rec_cumulative: true,
             camera: Camera::default(),
             notice: None,
             refit: true,

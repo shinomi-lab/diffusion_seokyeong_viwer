@@ -8,6 +8,8 @@ use crate::config::Mech;
 pub const EVER_RECV: u8 = 1;
 pub const EVER_INT: u8 = 2;
 pub const EVER_EXT: u8 = 4;
+/// 一度でも推薦の段階で直接受け取った（累積。推薦 on のときだけ立つ）。
+pub const EVER_REC: u8 = 8;
 
 #[derive(Clone, Debug)]
 pub struct NodeState {

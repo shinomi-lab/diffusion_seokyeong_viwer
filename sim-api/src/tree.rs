@@ -126,6 +126,9 @@ pub struct BranchNodeView {
     pub lane: u32,
     pub n_received: u32,
     pub cum_xact: u32,
+    /// 推薦で受け取った人数（このラウンド）と、推薦で受け取ったことのある人数（累積）。
+    pub rec_received: u32,
+    pub cum_rec: u32,
 }
 
 #[derive(Clone, Debug, Serialize)]
@@ -155,6 +158,8 @@ impl BranchTree {
                 lane: lanes[n.id as usize],
                 n_received: n.summary.as_ref().map(|s| s.n_received).unwrap_or(0),
                 cum_xact: n.summary.as_ref().map(|s| s.cum_xact).unwrap_or(0),
+                rec_received: n.summary.as_ref().map(|s| s.rec_received).unwrap_or(0),
+                cum_rec: n.summary.as_ref().map(|s| s.cum_rec).unwrap_or(0),
             })
             .collect();
         let n_lanes = lanes.iter().copied().max().unwrap_or(0) + 1;

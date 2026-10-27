@@ -58,6 +58,8 @@ pub enum Metric {
 pub struct Display {
     pub kinds: Vec<u8>,
     pub pulse: Vec<u8>,
+    /// 0 = なし・フォロー、1 = 推薦、2 = 推薦由来の連鎖（`state_at_wave`）。
+    pub via: Vec<u8>,
     pub key: (usize, i32, bool, u32),
 }
 
@@ -124,6 +126,8 @@ pub struct Slot {
     pub sectors: Vec<overview::RingSectorCell>,
     pub sectors_key: Option<(usize, i32, bool, u32)>,
     pub detail_cache: Option<(u32, usize, sim_api::log::NodeDetail)>,
+    /// 種類どうしの似かた（R12）。(ラウンド数, L×L)。巻き戻し・枝の切り替えで消す。
+    pub rec_sim_cache: Option<(usize, Vec<f64>)>,
     pub mc_rx: Option<Receiver<McResult>>,
     pub mc_running: bool,
     pub mc_result: Option<McResult>,
@@ -150,6 +154,7 @@ impl Slot {
             sectors: Vec::new(),
             sectors_key: None,
             detail_cache: None,
+            rec_sim_cache: None,
             mc_rx: None,
             mc_running: false,
             mc_result: None,
@@ -356,6 +361,24 @@ impl App {
             frame_ms: 0.0,
             last_frame: Instant::now(),
         };
+        if let Some(th) = cli.rec {
+            app.slots[0].form.recommender = sim_api::config::RecommenderConfig {
+                enabled: true,
+                threshold: th,
+                ..Default::default()
+            };
+            if cli.rec_baseline {
+                app.slots[0].form.recommender.method = sim_api::config::RecMethod::Baseline;
+            }
+        }
+        if let Some(eps) = cli.rec_wave {
+            app.slots[0].form.recommender = sim_api::config::RecommenderConfig {
+                enabled: true,
+                method: sim_api::config::RecMethod::Wave,
+                eps,
+                ..Default::default()
+            };
+        }
         if let Some(path) = cli.graph.clone() {
             app.load_graph_path(&path);
             if let Some(ip) = cli.ip {
@@ -464,6 +487,14 @@ impl App {
         self.is_dirty_slot(0)
     }
 
+    /// 適用済みのシナリオで推薦が on か（`slot`: A = 0 / B = 1）。
+    pub fn rec_on(&self, slot: usize) -> bool {
+        self.slots
+            .get(slot)
+            .and_then(|s| s.scenario.as_ref())
+            .is_some_and(|scn| scn.cfg.recommender.enabled)
+    }
+
     pub fn is_dirty_slot(&self, i: usize) -> bool {
         self.slots.get(i).is_some_and(|s| {
             s.scenario.is_some()
@@ -505,6 +536,7 @@ impl App {
             s.ever.clear();
             s.display = None;
             s.detail_cache = None;
+            s.rec_sim_cache = None;
             s.mc_result = None;
             s.sectors_key = None;
             s.scene = SceneCache::default();
@@ -672,6 +704,7 @@ impl App {
         slot.display = None;
         slot.mc_result = None;
         slot.detail_cache = None;
+        slot.rec_sim_cache = None;
     }
 
     /// 再生位置を、全スロットの最後のラウンドの終端に合わせる。
@@ -739,6 +772,7 @@ impl App {
             slot.display = None;
             slot.mc_result = None;
             slot.detail_cache = None;
+            slot.rec_sim_cache = None;
         }
         self.sync_playback_to_end();
     }
@@ -844,10 +878,18 @@ impl App {
             return;
         }
         let empty = sim_api::log::EventColumns::default();
-        let st = state_at_wave(&before, events.unwrap_or(&empty), k, int_mode, ip);
+        let st = state_at_wave(
+            &before,
+            events.unwrap_or(&empty),
+            k,
+            int_mode,
+            ip,
+            self.view.rec_cumulative,
+        );
         slot.display = Some(Display {
             kinds: st.kinds,
             pulse: st.pulse,
+            via: st.via,
             key,
         });
         self.rebuild_attrs(i);
@@ -914,17 +956,11 @@ impl App {
     fn rebuild_attrs(&mut self, i: usize) {
         let slot = &mut self.slots[i];
         let Some(d) = &slot.display else { return };
+        // pulse のビット: bit0 = 現在のウェーブ、bit1 = 推薦で受信、bit2 = 推薦由来の連鎖（nodes.wgsl）
+        let attr = |i: usize| d.kinds[i] as u32 | ((d.pulse[i] | d.via[i] << 1) as u32) << 8;
         let attrs: Vec<u32> = match &slot.scene.nodes {
-            Some(nodes) => nodes
-                .iter()
-                .map(|&i| d.kinds[i as usize] as u32 | (d.pulse[i as usize] as u32) << 8)
-                .collect(),
-            None => d
-                .kinds
-                .iter()
-                .zip(&d.pulse)
-                .map(|(&k, &p)| k as u32 | (p as u32) << 8)
-                .collect(),
+            Some(nodes) => nodes.iter().map(|&i| attr(i as usize)).collect(),
+            None => (0..d.kinds.len()).map(attr).collect(),
         };
         slot.scene.attrs = Arc::new(attrs);
         slot.scene.attr_ver += 1;

@@ -16,7 +16,7 @@ export interface EventCols {
   nArr: Uint8Array;
   uInt: Float32Array;
   uExt: Float32Array;
-  /** bit0 = int_fired, bit1 = ext_fired, bit2 = enqueued */
+  /** bit0 = int_fired, bit1 = ext_fired, bit2 = enqueued, bit3 = 推薦で受信, bit4 = 推薦由来の連鎖 */
   flags: Uint8Array;
 }
 
@@ -31,6 +31,9 @@ export interface StepResult {
 export interface Ops {
   loadGraph: { args: { bytes: Uint8Array; opts: GraphOpts }; res: string };
   paramSpecs: { args: Record<string, never>; res: string };
+  recParamSpecs: { args: Record<string, never>; res: string };
+  recSim: { args: Record<string, never>; res: Float64Array };
+  recWaveTrace: { args: Record<string, never>; res: string };
   createScenario: { args: { configJson: string }; res: string };
   centralityRanking: { args: { metric: 'degree' | 'pagerank' | 'vc'; top: number; vcCsv?: string }; res: Uint32Array };
   setIp: { args: { node: number }; res: string };
@@ -93,6 +96,14 @@ export interface RoundSummary {
   n_int_active_now: number;
   recv: UtilityStats;
   all: UtilityStats;
+  /** 推薦（推薦 off では 0）。 */
+  rec_received: number;
+  rec_share: number;
+  rec_xact: number;
+  chain_received: number;
+  chain_xact: number;
+  /** 一度でも推薦で受け取った人数（累積）。 */
+  cum_rec: number;
 }
 
 export interface GraphInfo {
@@ -137,6 +148,21 @@ export interface RecvInfo {
   from: number;
   from_label: number;
   n_arr: number;
+  /** 0 = フォロー、1 = 推薦、2 = 推薦由来の連鎖。 */
+  via: number;
+}
+
+/** 推薦のスコアの表の 1 行（種類 m）。 */
+export interface RecRowJson {
+  m: number;
+  received: number;
+  ps: number;
+  px: number;
+  /** 協調フィルタリング（基準ではスコアそのもの）。 */
+  f_cf: number;
+  /** 社会的証明（直近のラウンド。基準では 0）。 */
+  f_g: number;
+  f: number;
 }
 
 export interface NodeDetailJson {
@@ -148,6 +174,8 @@ export interface NodeDetailJson {
   int_rounds: number[];
   ext_round: number | null;
   is_ip: boolean;
+  /** 推薦 on のときだけ要素がある。 */
+  rec: RecRowJson[];
 }
 
 export interface Band {
@@ -176,6 +204,8 @@ export interface BranchNodeJson {
   lane: number;
   n_received: number;
   cum_xact: number;
+  rec_received: number;
+  cum_rec: number;
 }
 
 export interface BranchTreeJson {
@@ -193,6 +223,8 @@ export interface McResultJson {
   new_share: Band;
   mean_u_int: Band;
   mean_u_ext: Band;
+  new_rec: Band;
+  cum_rec: Band;
   total_xact_mean: number;
   total_share_mean: number;
 }

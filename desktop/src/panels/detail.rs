@@ -30,6 +30,10 @@ impl App {
             ui.add(egui::Label::new("ネットワーク上のノードをクリックすると、効用の推移・受信したラウンドと受信元・活性になったラウンドを表示します。").wrap());
             return;
         };
+        // 推薦のスコアの表（推薦 off では空。種類の数だけなので毎フレーム計算してよい）
+        let rec_rows = session.rec_detail(node);
+        let hybrid =
+            session.scenario().cfg.recommender.method == sim_api::config::RecMethod::Hybrid;
         let stale = !matches!(&self.slots[0].detail_cache, Some((n, r, _)) if *n == node && *r == self.slots[0].rounds.len());
         if stale {
             self.slots[0].detail_cache =
@@ -98,6 +102,21 @@ impl App {
             ui.label("外部行動のラウンド");
             ui.label(d.ext_round.map(|r| r.to_string()).unwrap_or("—".into()));
             ui.end_row();
+            if !rec_rows.is_empty() {
+                let rs: Vec<String> = d
+                    .received
+                    .iter()
+                    .filter(|r| r.via == 1)
+                    .map(|r| r.round.to_string())
+                    .collect();
+                ui.label("推薦で受け取ったラウンド");
+                ui.label(if rs.is_empty() {
+                    "—".to_string()
+                } else {
+                    rs.join(", ")
+                });
+                ui.end_row();
+            }
         });
         egui::Grid::new("node_recv").striped(true).show(ui, |ui| {
             for h in ["受信ラウンド", "ウェーブ", "受信元（ラベル）", "経路数"]
@@ -112,11 +131,45 @@ impl App {
             for r in &d.received {
                 ui.label(r.round.to_string());
                 ui.label((r.wave + 1).to_string());
-                ui.label(r.from_label.to_string());
+                ui.label(match r.via {
+                    1 => "推薦".to_string(),
+                    2 => format!("{}（推薦由来）", r.from_label),
+                    _ => r.from_label.to_string(),
+                });
                 ui.label(r.n_arr.to_string());
                 ui.end_row();
             }
         });
+        if !rec_rows.is_empty() {
+            ui.strong("推薦のスコア（現在の履歴での推定）");
+            egui::Grid::new("node_rec").striped(true).show(ui, |ui| {
+                // 幅に収まるよう短い見出しにする（P̂s = シェア、P̂x = 外部行動）
+                let mut heads = vec!["種類", "受信", "P̂s", "P̂x"];
+                if hybrid {
+                    heads.extend(["f_CF", "f_G"]);
+                }
+                heads.push("スコア");
+                for h in heads {
+                    ui.strong(h);
+                }
+                ui.end_row();
+                for r in &rec_rows {
+                    ui.label(format!("m{}", r.m));
+                    ui.label(r.received.to_string());
+                    ui.label(format!("{:.3}", r.ps));
+                    ui.label(format!("{:.3}", r.px));
+                    if hybrid {
+                        ui.label(format!("{:.3}", r.f_cf));
+                        ui.label(format!("{:.3}", r.f_g));
+                    }
+                    ui.label(format!("{:.3}", r.f));
+                    ui.end_row();
+                }
+            });
+            if hybrid {
+                ui.add(egui::Label::new(RichText::new("f_CF は次のラウンドに使う値（現在の履歴）、f_G は直近のラウンドの値（フォロー先のうちシェアした人の割合）。").weak()).wrap());
+            }
+        }
         if !d.is_ip
             && ui
                 .button("このノードを IP にする（履歴は消えます）")

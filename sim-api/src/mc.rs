@@ -32,10 +32,15 @@ pub struct TrialSeries {
     /// 受信済みノードの平均効用。
     pub mean_u_int: Vec<f32>,
     pub mean_u_ext: Vec<f32>,
+    /// 推薦で受け取った人数（このラウンド）と、推薦で受け取ったことのある人数（累積）。推薦 off では 0。
+    pub new_rec: Vec<u32>,
+    pub cum_rec: Vec<u32>,
 }
 
 impl TrialSeries {
     fn clear(&mut self) {
+        self.new_rec.clear();
+        self.cum_rec.clear();
         self.new_xact.clear();
         self.new_share.clear();
         self.mean_u_int.clear();
@@ -52,6 +57,9 @@ pub struct McResult {
     pub new_share: Band,
     pub mean_u_int: Band,
     pub mean_u_ext: Band,
+    /// 推薦で受け取った人数（このラウンド）・推薦で受け取ったことのある人数（累積）。
+    pub new_rec: Band,
+    pub cum_rec: Band,
     /// 系列全体の合計の平均（バッチの mean_num_xact / mean_num_share と同じ量）。
     pub total_xact_mean: f64,
     pub total_share_mean: f64,
@@ -86,31 +94,70 @@ pub fn run_trial(
     out.clear();
     let mut pop = scn.initial.clone();
     let mech = scn.mech;
+    // Rモデル: 推薦専用の乱数は試行ごとに作る。拡散の乱数の複製から種を取るので、拡散の乱数は消費しない（INV-W2）。
+    let rc = &scn.cfg.recommender;
+    let is_wave = rc.enabled && rc.method == crate::config::RecMethod::Wave;
+    let mut rec_rng = crate::recommend::rec_rng(rand::RngCore::next_u64(&mut rng.clone()));
+    let mut rec_a = scn.ebar0;
     for (r, &c) in seq.iter().enumerate() {
         let round = r as u32 + 1;
         let Choice::Msg(id) = c;
-        let k = run_round(
-            &scn.graph.csr,
-            scn.cfg.receipt_probability,
-            &mut pop,
-            scratch,
-            ip,
-            id,
-            &scn.messages[id as usize],
-            &mech,
-            round,
-            rng,
-            &mut NoTrace,
-        );
+        let k = if scn.cfg.recommender.enabled {
+            // 推薦 on: セッションと同じく、ラウンドの終わりに履歴を更新する（INV-R5）
+            let mut col = crate::recommend::HistoryCollector::default();
+            let k = crate::engine::run_round_rec(
+                &scn.graph.csr,
+                scn.cfg.receipt_probability,
+                &mut pop,
+                scratch,
+                ip,
+                id,
+                &scn.messages[id as usize],
+                &mech,
+                Some(&scn.cfg.recommender),
+                is_wave.then_some(crate::engine::WaveCtx {
+                    rng: &mut rec_rng,
+                    a_t: rec_a,
+                    ebar0: scn.ebar0,
+                }),
+                round,
+                rng,
+                &mut col,
+            );
+            crate::recommend::update_history(&mut pop, id, col.0.into_iter());
+            if is_wave && rc.eps * rc.delta > 0.0 {
+                rec_a = rc.mu * rec_a + (1.0 - rc.mu) * k.e_hat_end;
+            }
+            k
+        } else {
+            run_round(
+                &scn.graph.csr,
+                scn.cfg.receipt_probability,
+                &mut pop,
+                scratch,
+                ip,
+                id,
+                &scn.messages[id as usize],
+                &mech,
+                round,
+                rng,
+                &mut NoTrace,
+            )
+        };
         let (xact, share) = (k.n_xact, k.n_share);
-        let (mut si, mut se, mut n) = (0.0f64, 0.0f64, 0u32);
+        let (mut si, mut se, mut n, mut cr) = (0.0f64, 0.0f64, 0u32, 0u32);
         for s in &pop.states {
+            if s.flags & crate::node::EVER_REC != 0 {
+                cr += 1;
+            }
             if s.flags & EVER_RECV != 0 {
                 si += s.u_int;
                 se += s.u_ext;
                 n += 1;
             }
         }
+        out.new_rec.push(k.rec_received);
+        out.cum_rec.push(cr);
         out.new_xact.push(xact);
         out.new_share.push(share);
         out.mean_u_int
@@ -169,6 +216,14 @@ pub fn summarize(trials: &[TrialSeries], rounds: usize) -> McResult {
         new_share: band_of(&new_s, rounds),
         mean_u_int: band_of(&ui, rounds),
         mean_u_ext: band_of(&ue, rounds),
+        new_rec: band_of(
+            &trials.iter().map(|s| f(&s.new_rec)).collect::<Vec<_>>(),
+            rounds,
+        ),
+        cum_rec: band_of(
+            &trials.iter().map(|s| f(&s.cum_rec)).collect::<Vec<_>>(),
+            rounds,
+        ),
         // バッチと同じく整数で合計してから 1 度だけ割る
         total_xact_mean: tx as f64 / t as f64,
         total_share_mean: ts as f64 / t as f64,

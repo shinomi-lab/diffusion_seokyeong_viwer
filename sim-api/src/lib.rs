@@ -13,6 +13,7 @@ pub mod node;
 pub mod overview;
 pub mod params;
 pub mod population;
+pub mod recommend;
 pub mod rng;
 pub mod session;
 pub mod tree;

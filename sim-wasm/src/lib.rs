@@ -90,6 +90,11 @@ impl Simulator {
         self.inner.param_specs().map_err(e)
     }
 
+    #[wasm_bindgen(js_name = recParamSpecs)]
+    pub fn rec_param_specs(&self) -> Result<String, JsValue> {
+        self.inner.rec_param_specs().map_err(e)
+    }
+
     #[wasm_bindgen(js_name = createScenario)]
     pub fn create_scenario(&mut self, config_json: &str) -> Result<String, JsValue> {
         self.inner.create_scenario(config_json).map_err(e)
@@ -164,6 +169,17 @@ impl Simulator {
     #[wasm_bindgen(js_name = everFlags)]
     pub fn ever_flags(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.ever_flags().map_err(e)
+    }
+
+    #[wasm_bindgen(js_name = recSim)]
+    pub fn rec_sim(&self) -> Result<Vec<f64>, JsValue> {
+        self.inner.rec_sim().map_err(e)
+    }
+
+    /// Rモデルの推薦の推移（JSON: `{trace: [{wave, e_hat, budget, slots, miss}], prior, ebar0}`）。
+    #[wasm_bindgen(js_name = recWaveTrace)]
+    pub fn rec_wave_trace(&self) -> Result<String, JsValue> {
+        self.inner.rec_wave_trace().map_err(e)
     }
 
     pub fn kinds(&self, int_mode: u8) -> Result<Vec<u8>, JsValue> {

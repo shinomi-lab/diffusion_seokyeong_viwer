@@ -25,6 +25,8 @@ cargo run --release -p desktop
 | `--expand RING` | デモの最後に、そのホップのリングを個別に展開する |
 | `--mc N` | デモで、発信した系列を MC で N 試行回す（別スレッド） |
 | `--export-parquet PATH` | デモの最後に、ノード別イベントを Parquet に書き出す |
+| `--rec THETA` | 推薦を on（方式 CF＋グラフ）にし、閾値 θ を THETA にして始める。`--rec-baseline` で方式を基準に |
+| `--rec-wave EPS` | 推薦を on（方式 Rモデル、v3）にし、推薦の強さ ε を EPS にして始める |
 | `--screenshot PATH` | デモのあとに画面を PNG に保存して終了する |
 | `--bench N` | ランダム配置の N ノードを描き、フレーム時間を標準出力へ出して終了する（垂直同期なし） |
 
@@ -39,6 +41,7 @@ cargo run --release -p desktop -- --graph "../diffusion_seokyeong/test/twitter_d
 - **2 画面比較**: 左パネルの「2 画面比較（A と B）」で「比較モード」を入れると、中央が左右に分かれます（B の機構を変えて「B に設定を適用」）。
 - **画像・連番 PNG・MP4**: ツールバーの「画像 (PNG)」（ネットワーク図）、「連番 PNG…」（いまのラウンドの再生を、ウェーブごとに `frame_0001.png`… としてフォルダへ保存。ラウンド開始前を 1 コマ目とし、枚数 = ウェーブ数 + 1）、「MP4 にする」（`ffmpeg` が PATH にあるとき、直前の連番 PNG をまとめる）。時系列グラフの「SVG」「PNG」でグラフを保存できます。
 - 追加の CLI: `--branch`（巻き戻し → 別のメッセージで分岐 → 元の枝へ戻る。元と一致を標準出力に出す）、`--compare`（B を「既定」の機構にして並べる）、`--record DIR [--mp4 PATH]`（連番 PNG と MP4）。
+- **推薦（2026-10-22）**: 使い方・表示は Web 版（`web_read_me.md` の 3.6）と同じ。左パネルの「推薦」の節で on/off・θ・w・n₀ を変えて「設定を適用」。方式（CF＋グラフ／基準）・似かたの表・f_CF／f_G の列、推薦による受信の記録（累積の黄色・「推薦: 累積／このラウンドのみ」・系列・MC・分岐ツリー・ノード詳細）も Web 版と同じです。`--rec THETA` で推薦を on（方式 CF＋グラフ、閾値 THETA）にして始められます（`--rec-baseline` を足すと基準）（例: `--demo --rec 0.05 --sequence 00000 --screenshot out.png`）。Parquet にも `via` 列が加わります。方式「Rモデル（v3）」と「推薦の推移（直近のラウンド）」の表も Web 版と同じです（`--rec-wave 1.0` で始められます。例: `--graph spec/fixtures/random300.txt --demo --rec-wave 1.0 --screenshot out.png`）。
 
 ## 3. 書き出し
 ツールバーから、シナリオ記録（JSON）、ラウンド別（CSV）、ノード別イベント（CSV / **Parquet**）を保存できます。Parquet は Polars（Python）で読めます。

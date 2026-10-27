@@ -2,6 +2,7 @@
 import { applyB, setCompare, useCompare } from '../store/actions';
 import { isDirty, useSession, useSessionB } from '../store/session';
 import { MechanismEditor } from './MechanismEditor';
+import { RecommenderEditor } from './RecommenderEditor';
 
 export function ComparePanel() {
   const enabled = useCompare((c) => c.enabled);
@@ -16,8 +17,9 @@ export function ComparePanel() {
       </label>
       {enabled && (
         <div data-testid="compare-b">
-          <p className="note">B の設定（機構）。A と同じ IP・同じ選択が B にも適用されます。</p>
+          <p className="note">B の設定（機構・推薦）。A と同じ IP・同じ選択が B にも適用されます。</p>
           <MechanismEditor store={useSessionB} />
+          <RecommenderEditor store={useSessionB} />
           <button className={dirtyB ? 'primary' : ''} disabled={!b.scenario} onClick={() => void applyB()} data-testid="apply-b">
             B に設定を適用{dirtyB && ' ●未適用'}
           </button>

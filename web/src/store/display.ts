@@ -9,6 +9,8 @@ import { useView } from './view';
 export interface Display {
   kinds: Uint8Array;
   pulse: Uint8Array;
+  /** 0 = なし・フォロー、1 = 推薦、2 = 推薦由来の連鎖（stateAtWave）。 */
+  via: Uint8Array;
   events: EventCols;
   k: number;
 }
@@ -20,6 +22,7 @@ export function useDisplay(slot: 0 | 1 = 0): Display | null {
   const ip = store((s) => s.ip);
   const positions = store((s) => s.positions);
   const intMode = useView((s) => s.intMode);
+  const recMode = useView((s) => s.recMode);
   const k = usePlayback((s) => s.k);
   return useMemo(() => {
     if (!positions || ip === null) return null;
@@ -29,6 +32,6 @@ export function useDisplay(slot: 0 | 1 = 0): Display | null {
     const ev = cur ? cur.events : emptyEvents();
     const last = cur ? cur.summary.n_waves - 1 : -1;
     const kk = Math.min(k, last);
-    return { ...stateAtWave(before, ev, kk, intMode, ip), events: ev, k: kk };
-  }, [rounds, ip, positions, intMode, k]);
+    return { ...stateAtWave(before, ev, kk, intMode, ip, recMode === 0), events: ev, k: kk };
+  }, [rounds, ip, positions, intMode, recMode, k]);
 }

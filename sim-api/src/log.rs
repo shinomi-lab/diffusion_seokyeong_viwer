@@ -11,6 +11,14 @@ pub const F_EXT_NOW: u8 = 4;
 pub const F_EVER_RECV: u8 = 8;
 pub const F_EVER_INT: u8 = 16;
 pub const F_EVER_EXT: u8 = 32;
+/// このラウンドに推薦で受信した（`recommender-design.md` 6.5）。
+pub const F_REC_NOW: u8 = 64;
+/// 一度でも推薦で受け取った（累積）。推薦由来の連鎖の「このラウンド」はイベント列（`EV_RECCHAIN`）で分かる。
+pub const F_EVER_REC: u8 = 128;
+/// `Session::ever_flags()` の推薦（累積）のビット（`F_EVER_REC >> 3`）。1・2・4 は EVER_RECV・INT・EXT と同じ。
+pub const EVER_FLAG_REC: u8 = F_EVER_REC >> 3;
+/// `ever_flags()` に出す累積のビット（このラウンドの印 `F_REC_NOW` は含めない）。
+pub const EVER_FLAGS_MASK: u8 = 1 | 2 | 4 | EVER_FLAG_REC;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -222,6 +230,14 @@ pub struct RoundSummary {
     pub recv: UtilityStats,
     /// IP 以外の全ノード。
     pub all: UtilityStats,
+    /// 推薦（`recommender-design.md` 6.4）。推薦 off では 0。
+    pub rec_received: u32,
+    pub rec_share: u32,
+    pub rec_xact: u32,
+    pub chain_received: u32,
+    pub chain_xact: u32,
+    /// 一度でも推薦で受け取った人数（累積、このラウンドの終わり）。
+    pub cum_rec: u32,
 }
 
 /// 列指向（WASM の TypedArray にそのまま渡せる）。長さはすべて同じ。
@@ -233,7 +249,7 @@ pub struct EventColumns {
     pub n_arr: Vec<u8>,
     pub u_int: Vec<f32>,
     pub u_ext: Vec<f32>,
-    /// bit0 = int_fired, bit1 = ext_fired, bit2 = enqueued
+    /// bit0 = int_fired, bit1 = ext_fired, bit2 = enqueued, bit3 = 推薦で受信, bit4 = 推薦由来の連鎖
     pub flags: Vec<u8>,
 }
 
@@ -250,6 +266,10 @@ impl EventColumns {
 pub const EV_INT: u8 = 1;
 pub const EV_EXT: u8 = 2;
 pub const EV_ENQ: u8 = 4;
+/// 推薦で受信（直接）。
+pub const EV_REC: u8 = 8;
+/// 推薦由来の連鎖で受信。
+pub const EV_RECCHAIN: u8 = 16;
 
 #[derive(Default)]
 pub struct TraceRecorder {
@@ -268,7 +288,12 @@ impl Observer for TraceRecorder {
         c.flags.push(
             if ev.int_fired { EV_INT } else { 0 }
                 | if ev.ext_fired { EV_EXT } else { 0 }
-                | if ev.enqueued { EV_ENQ } else { 0 },
+                | if ev.enqueued { EV_ENQ } else { 0 }
+                | match ev.via {
+                    crate::engine::VIA_REC => EV_REC,
+                    crate::engine::VIA_RECCHAIN => EV_RECCHAIN,
+                    _ => 0,
+                },
         );
     }
 }
@@ -278,8 +303,11 @@ pub struct RecvInfo {
     pub round: u32,
     pub wave: u32,
     pub from: u32,
+    /// 推薦で受信したときは -1。
     pub from_label: i64,
     pub n_arr: u8,
+    /// 受信の経路（0 = フォロー、1 = 推薦、2 = 推薦由来の連鎖）。
+    pub via: u8,
 }
 
 /// F10: ノード詳細。

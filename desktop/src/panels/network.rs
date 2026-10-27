@@ -528,7 +528,12 @@ impl App {
                 let stroke = Stroke::new(1.6, col(self.tokens.wave));
                 let ev = &r.events;
                 for i in 0..ev.len() {
-                    if ev.wave[i] as i32 != k || !visible(ev.node[i]) || !visible(ev.from[i]) {
+                    // 推薦で受信した人（from = FROM_REC）には送り手がいないので、矢印を描かない
+                    if ev.wave[i] as i32 != k
+                        || ev.from[i] == sim_api::engine::FROM_REC
+                        || !visible(ev.node[i])
+                        || !visible(ev.from[i])
+                    {
                         continue;
                     }
                     let a = to_pos(
@@ -838,6 +843,21 @@ impl App {
                 }
                 ui.label(st.label.clone());
             }
+            // 推薦（A か B のどちらかで on のときだけ）: 推薦で受信 = 黄色の塗り（青い縁 = 内部活性）、推薦由来 = 暗い黄色の塗り
+            if self.rec_on(0) || (self.compare && self.rec_on(1)) {
+                let t = &self.tokens;
+                let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+                ui.painter().circle_filled(r.center(), 6.0, col(t.rec));
+                ui.label("推薦で受信");
+                let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+                ui.painter().circle_filled(r.center(), 4.5, col(t.rec));
+                ui.painter()
+                    .circle_stroke(r.center(), 5.5, Stroke::new(2.0, col(t.split[0])));
+                ui.label("推薦・内部活性");
+                let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
+                ui.painter().circle_filled(r.center(), 4.5, col(t.rec_chain));
+                ui.label("推薦由来");
+            }
         });
         ui.horizontal_wrapped(|ui| {
             let pb = &mut self.playback;
@@ -901,6 +921,30 @@ impl App {
                 });
             if before != self.view.int_mode {
                 self.slots[self.cur].display = None;
+            }
+            // 推薦で受信の色: 累積（一度でも推薦で受け取った人）か、このラウンドのみか
+            if self.rec_on(0) || (self.compare && self.rec_on(1)) {
+                ui.label("推薦:");
+                let before = self.view.rec_cumulative;
+                egui::ComboBox::from_id_salt("recmode")
+                    .selected_text(if before {
+                        "累積"
+                    } else {
+                        "このラウンドのみ"
+                    })
+                    .show_ui(ui, |ui| {
+                        ui.selectable_value(&mut self.view.rec_cumulative, true, "累積");
+                        ui.selectable_value(
+                            &mut self.view.rec_cumulative,
+                            false,
+                            "このラウンドのみ",
+                        );
+                    });
+                if before != self.view.rec_cumulative {
+                    for s in &mut self.slots {
+                        s.display = None;
+                    }
+                }
             }
         });
     }

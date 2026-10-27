@@ -67,3 +67,32 @@ describe('stateAtWave', () => {
     expect(b.every((x) => x === 0)).toBe(true);
   });
 });
+
+describe('stateAtWave の推薦の経路（recommender-design.md 8.2）', () => {
+  // IP=0。wave0: 1（フォロー）。wave1: 2（推薦、シェア）。wave2: 3（推薦由来）
+  const ev = events([
+    { wave: 0, node: 1, from: 0, flags: 0 },
+    { wave: 1, node: 2, from: 0xffffffff, flags: 1 | 4 | 8 },
+    { wave: 2, node: 3, from: 2, flags: 16 },
+  ]);
+  it('表示中のウェーブまでの経路だけを返す', () => {
+    const b = new Uint8Array(4);
+    expect([...stateAtWave(b, ev, 0, 0, 0).via]).toEqual([0, 0, 0, 0]);
+    expect([...stateAtWave(b, ev, 1, 0, 0).via]).toEqual([0, 0, 1, 0]);
+    expect([...stateAtWave(b, ev, 2, 0, 0).via]).toEqual([0, 0, 1, 2]);
+  });
+});
+
+describe('stateAtWave の推薦の累積表示', () => {
+  // ノード 1 は前のラウンドで推薦で受け取った（EVER_REC = 16）。このラウンドはノード 2 が推薦由来、ノード 3 が推薦
+  const ev = events([
+    { wave: 0, node: 2, from: 0, flags: 16 },
+    { wave: 1, node: 3, from: 0xffffffff, flags: 8 },
+  ]);
+  const before = Uint8Array.from([0, 1 | 16, 0, 0]);
+  it('累積なら前のラウンドの推薦も 1、このラウンドのみなら今回の分だけ', () => {
+    expect([...stateAtWave(before, ev, 1, 0, 0, true).via]).toEqual([0, 1, 2, 1]);
+    expect([...stateAtWave(before, ev, 1, 0, 0, false).via]).toEqual([0, 0, 2, 1]);
+    expect([...stateAtWave(before, ev, -1, 0, 0, true).via]).toEqual([0, 1, 0, 0]);
+  });
+});

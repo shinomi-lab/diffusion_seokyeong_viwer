@@ -1,11 +1,14 @@
 // 再生（F06）。ラウンド開始時の everFlags と、そのラウンドのイベント列から、ウェーブ k の終了時点の状態を作る（9.5）。
 import type { EventCols } from '../worker/protocol';
-import { EV_EXT, EV_INT, EVER_EXT, EVER_INT, EVER_RECV, kindOf } from './kinds';
+import { EV_EXT, EV_INT, EV_REC, EV_RECCHAIN, EVER_EXT, EVER_INT, EVER_REC, EVER_RECV, kindOf } from './kinds';
 
 export interface WaveState {
   kinds: Uint8Array;
   /** いまのウェーブ（wave == k）で受信したノードは 1。 */
   pulse: Uint8Array;
+  /** 推薦の印（0 = なし・フォロー、1 = 推薦で受信、2 = 推薦由来の連鎖）。
+   *  推薦で受信は `recCumulative` なら前のラウンドまでの分も含む（累積）。推薦由来はこのラウンドのウェーブ k まで。 */
+  via: Uint8Array;
 }
 
 /**
@@ -13,11 +16,13 @@ export interface WaveState {
  * - 規則: イベント（wave ≤ k）ごとに `node` へ EVER_RECV、int_fired なら EVER_INT、ext_fired なら EVER_EXT を立てる。
  *   `intMode = 1`（このラウンドのみ）では、内部は「そのラウンドの int_fired」だけで判定し、外部は常に累積。
  */
-export function stateAtWave(everBefore: Uint8Array, ev: EventCols, k: number, intMode: 0 | 1, ip: number): WaveState {
+export function stateAtWave(everBefore: Uint8Array, ev: EventCols, k: number, intMode: 0 | 1, ip: number, recCumulative = true): WaveState {
   const n = everBefore.length;
   const ever = Uint8Array.from(everBefore);
   const intNow = new Uint8Array(n);
   const pulse = new Uint8Array(n);
+  const via = new Uint8Array(n);
+  if (recCumulative) for (let j = 0; j < n; j++) if (everBefore[j] & EVER_REC) via[j] = 1;
   for (let i = 0; i < ev.node.length; i++) {
     const w = ev.wave[i];
     if (w > k) continue;
@@ -29,10 +34,12 @@ export function stateAtWave(everBefore: Uint8Array, ev: EventCols, k: number, in
     }
     if (ev.flags[i] & EV_EXT) ever[node] |= EVER_EXT;
     if (w === k) pulse[node] = 1;
+    if (ev.flags[i] & EV_REC) via[node] = 1;
+    else if (ev.flags[i] & EV_RECCHAIN && via[node] === 0) via[node] = 2;
   }
   const kinds = new Uint8Array(n);
   for (let j = 0; j < n; j++) kinds[j] = kindOf(ever[j], intNow[j] === 1, j === ip, intMode);
-  return { kinds, pulse };
+  return { kinds, pulse, via };
 }
 
 /** ラウンド開始前の状態（`k = -1`）。 */

@@ -247,3 +247,70 @@ fn many_nodes_draw_in_one_call() {
     let px = render(&g, &frame_for(&cam, pos, vec![2; n], vec![]));
     assert!(px.chunks(4).any(|p| p[3] > 0));
 }
+
+/// 推薦: pulse の bit1 で中を推薦の色（黄色）で塗り、内部活性なら青の縁取り。bit2（推薦由来）は縁取りなしで、中を暗い黄色で塗る。
+#[test]
+fn recommended_nodes_are_filled_and_rings_mark_internal() {
+    let Some(g) = gpu() else {
+        eprintln!("GPU アダプタが無いのでスキップ");
+        return;
+    };
+    let t = Tokens::load();
+    let cam = Camera {
+        cx: 0.0,
+        cy: 0.0,
+        zoom: 40.0,
+    };
+    let nodes: [[f32; 2]; 4] = [[-3.0, 0.0], [-1.0, 0.0], [1.0, 0.0], [3.0, 0.0]];
+    let pos: Vec<f32> = nodes.iter().flatten().copied().collect();
+    // 受信のみ / 受信のみ + 推薦 / 内部活性 + 推薦 / 受信のみ + 推薦由来
+    let attrs = vec![1, 1 | (2 << 8), 2 | (2 << 8), 1 | (4 << 8)];
+    let px = render(&g, &frame_for(&cam, pos, attrs, vec![]));
+    let rgb = |s: [f32; 2], dx: f32| {
+        let i = ((s[1].round() as u32 * W + (s[0] + dx).round() as u32) * 4) as usize;
+        [px[i], px[i + 1], px[i + 2], px[i + 3]]
+    };
+    let near = |p: [u8; 4], c: [f32; 3]| {
+        p[3] > 200
+            && (0..3).all(|k| {
+                (p[k] as i32 * 255 / p[3] as i32 - (c[k] * 255.0).round() as i32).abs() <= 24
+            })
+    };
+    let s: Vec<[f32; 2]> = nodes
+        .iter()
+        .map(|&n| cam.to_screen([W as f32, H as f32], n))
+        .collect();
+    let r = t.radius_px;
+    assert!(
+        near(rgb(s[1], 0.0), t.rec),
+        "推薦で受信の中が黄色でない: {:?}",
+        rgb(s[1], 0.0)
+    );
+    assert!(
+        !near(rgb(s[0], 0.0), t.rec),
+        "フォロー経由の中が黄色になっている"
+    );
+    assert_eq!(
+        alpha_at(&px, s[1][0] + r + 1.5, s[1][1]),
+        0,
+        "受信のみ + 推薦に縁取りがある"
+    );
+    assert!(near(rgb(s[2], 0.0), t.rec), "内部活性 + 推薦の中が黄色でない");
+    let blue = t.kinds[2].fill.unwrap();
+    assert!(
+        near(rgb(s[2], r + t.rec_ring_px * 0.5), blue) || near(rgb(s[2], r), blue),
+        "内部活性 + 推薦に青の縁取りがない"
+    );
+    // 推薦由来: 中が暗い黄色（推薦で受信の明るい黄色とは別の色）で、縁取りはない
+    assert!(
+        near(rgb(s[3], 0.0), t.rec_chain),
+        "推薦由来の中が暗い黄色でない: {:?}",
+        rgb(s[3], 0.0)
+    );
+    assert!(!near(rgb(s[3], 0.0), t.rec), "推薦由来の中が明るい黄色になっている");
+    assert_eq!(
+        alpha_at(&px, s[3][0] + r + 1.5, s[3][1]),
+        0,
+        "推薦由来に縁取りがある"
+    );
+}

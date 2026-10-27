@@ -4,6 +4,8 @@
 //!   --bench N          ランダム配置の N ノードを描いてフレーム時間を標準出力へ（10.4）
 //!   --demo             サンプルを読み込み、IP を選び、数ラウンド発信する（--screenshot と併用）
 //!   --expand RING      デモで、発信のあとにそのホップのリングを個別に展開する
+//!   --rec THETA        推薦を on（方式 CF＋グラフ）にし、閾値 θ を THETA にして始める（確認用）
+//!   --rec-baseline     --rec と併用し、方式を基準（v1）にする
 //!   --screenshot PATH  デモの後に画面を PNG に保存して終了する
 
 #[derive(Default, Clone, Debug)]
@@ -31,6 +33,12 @@ pub struct Cli {
     pub branch: bool,
     /// 起動時に、凡例で非表示にしておく系列名（カンマ区切り。確認用）。
     pub hide: Option<String>,
+    /// 推薦を on にして始めるときの閾値 θ（確認用）。
+    pub rec: Option<f64>,
+    /// `--rec` の方式を基準（v1）にする。
+    pub rec_baseline: bool,
+    /// 推薦を方式 wave（Rモデル、v3）・推薦の強さ ε で始める（確認用）。
+    pub rec_wave: Option<f64>,
 }
 
 pub fn parse(args: impl Iterator<Item = String>) -> Result<Cli, String> {
@@ -53,7 +61,10 @@ pub fn parse(args: impl Iterator<Item = String>) -> Result<Cli, String> {
             "--branch" => cli.branch = true,
             "--hide" => cli.hide = Some(value("--hide")?),
             "--demo" => cli.demo = true,
-            "-h" | "--help" => return Err("使い方: desktop [--graph PATH] [--ip N] [--bench N] [--demo] [--sequence 0351] [--expand RING] [--mc N] [--export-parquet PATH] [--record DIR [--mp4 PATH]] [--compare] [--branch] [--screenshot PATH]".into()),
+            "--rec-baseline" => cli.rec_baseline = true,
+            "--rec-wave" => cli.rec_wave = Some(value("--rec-wave")?.parse().map_err(|_| "--rec-wave は数値で指定してください".to_string())?),
+            "--rec" => cli.rec = Some(value("--rec")?.parse().map_err(|_| "--rec は数値で指定してください".to_string())?),
+            "-h" | "--help" => return Err("使い方: desktop [--graph PATH] [--ip N] [--bench N] [--demo] [--sequence 0351] [--expand RING] [--mc N] [--export-parquet PATH] [--record DIR [--mp4 PATH]] [--compare] [--branch] [--rec THETA [--rec-baseline]] [--rec-wave EPS] [--screenshot PATH]".into()),
             other => return Err(format!("未知の引数です: {other}")),
         }
     }

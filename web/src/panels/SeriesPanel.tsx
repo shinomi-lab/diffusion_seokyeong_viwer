@@ -42,7 +42,7 @@ export function SeriesPanel() {
             ))}
             {placed.nodes.map((n) => (
               <g key={n.id} transform={`translate(${n.x},${n.y})`} onClick={() => click(n.id)} className="tree-node" data-node-id={n.id} data-round={n.round}>
-                <title>{n.id === 0 ? '初期状態（ラウンド 0）' : `ラウンド ${n.round}: m${n.choice === '-' ? '∅' : n.choice}（累積外部 ${n.cum_xact}）`}</title>
+                <title>{n.id === 0 ? '初期状態（ラウンド 0）' : `ラウンド ${n.round}: m${n.choice === '-' ? '∅' : n.choice}（累積外部 ${n.cum_xact}${n.cum_rec > 0 ? `、推薦で受信 ${n.rec_received}・累積 ${n.cum_rec}` : ''}）`}</title>
                 <circle r={7.5} fill={n.onActive ? 'var(--accent)' : 'var(--bg)'} stroke={n.current ? 'var(--warn)' : n.onActive ? 'var(--accent)' : 'var(--muted)'} strokeWidth={n.current ? 3 : 1.5} />
                 <text textAnchor="middle" dy="3.5" fontSize="9" fill={n.onActive ? 'var(--on-accent)' : 'var(--fg)'} pointerEvents="none">{n.id === 0 ? '0' : n.choice}</text>
               </g>

@@ -6,6 +6,9 @@ import { usePlayback } from '../store/playback';
 import { applyAll, chooseIpAll, loadGraphAll, restartAll, stepAll } from '../store/actions';
 import { isDirty, useSession } from '../store/session';
 import { MechanismEditor } from './MechanismEditor';
+import { RecommenderEditor } from './RecommenderEditor';
+import { RecSimTable } from './RecSimTable';
+import { RecWaveTable } from './RecWaveTable';
 import { ComparePanel } from './ComparePanel';
 
 let lastGraph: { bytes: Uint8Array; name: string } | null = null;
@@ -109,6 +112,13 @@ export function ControlPanel() {
       <details open>
         <summary>拡張機構（M1）</summary>
         <MechanismEditor store={useSession} />
+      </details>
+
+      <details open>
+        <summary>推薦</summary>
+        <RecommenderEditor store={useSession} />
+        <RecSimTable />
+        <RecWaveTable />
       </details>
 
       <ComparePanel />

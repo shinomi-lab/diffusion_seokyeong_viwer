@@ -7,6 +7,9 @@ use wasm_bindgen_test::*;
 const GRAPH: &[u8] = include_bytes!("../../spec/fixtures/random300.txt");
 const GOLDEN_OFF: &str = include_str!("../../spec/fixtures/golden_off.json");
 const GOLDEN_BALANCED: &str = include_str!("../../spec/fixtures/golden_balanced.json");
+const GOLDEN_REC: &str = include_str!("../../spec/fixtures/golden_rec.json");
+const GOLDEN_HYBRID: &str = include_str!("../../spec/fixtures/golden_hybrid.json");
+const GOLDEN_WAVE: &str = include_str!("../../spec/fixtures/golden_wave.json");
 
 fn check(name: &str, golden: &str) {
     let c = cases(GRAPH).into_iter().find(|c| c.name == name).unwrap();
@@ -27,6 +30,17 @@ fn check(name: &str, golden: &str) {
             i + 1
         );
         assert_eq!(a["kinds"], b["kinds"], "{name} round {} kinds", i + 1);
+        // 似かたは hybrid だけ（古いゴールデンにはキーが無い）
+        if b.get("rec_sim").is_some() {
+            assert_eq!(a["rec_sim"], b["rec_sim"], "{name} round {} rec_sim", i + 1);
+        }
+        // Rモデルの推薦の推移は wave だけ
+        assert_eq!(
+            a.get("rec_wave"),
+            b.get("rec_wave"),
+            "{name} round {} rec_wave",
+            i + 1
+        );
     }
 }
 
@@ -40,4 +54,22 @@ fn golden_off() {
 #[test]
 fn golden_balanced() {
     check("balanced", GOLDEN_BALANCED);
+}
+
+#[wasm_bindgen_test]
+#[test]
+fn golden_rec() {
+    check("rec", GOLDEN_REC);
+}
+
+#[wasm_bindgen_test]
+#[test]
+fn golden_hybrid() {
+    check("hybrid", GOLDEN_HYBRID);
+}
+
+#[wasm_bindgen_test]
+#[test]
+fn golden_wave() {
+    check("wave", GOLDEN_WAVE);
 }

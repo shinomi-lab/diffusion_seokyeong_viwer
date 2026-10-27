@@ -9,9 +9,10 @@
     "4": { "name": "both",        "label": "両方活性", "shape": "square", "fillSplit": ["#3A8EEA", "#9EE6C4"], "split": "left-right" },
     "5": { "name": "ip",          "label": "IP",       "shape": "circle", "fill": "#22B3E6", "stroke": "#E8F7FD", "strokeWidth": 2.5, "radiusScale": 2.4 }
   },
-  "highlight": { "currentWave": "#F2C14E", "selected": "#C9A0FF", "haloScale": 1.45 },
+  "highlight": { "currentWave": "#F2F4F8", "selected": "#C9A0FF", "haloScale": 1.45,
+                 "recommended": "#FFE600", "recChain": "#A89400", "recRingPx": 2.0 },
   "node": { "radiusPx": 4.0 },
-  "series": { "internal": "#3A8EEA", "external": "#9EE6C4", "both": "#F2C14E", "newShare": "#3A8EEA", "newXact": "#E8506E", "cumXact": "#9EE6C4", "bandAlpha": 0.16 },
+  "series": { "internal": "#3A8EEA", "external": "#9EE6C4", "both": "#FF8A3D", "newShare": "#3A8EEA", "newXact": "#E8506E", "cumXact": "#9EE6C4", "recXact": "#FFE600", "recShare": "#FFE600", "bandAlpha": 0.16 },
   "rings": { "stroke": "#3A4560", "dash": [2, 5], "label": "#7D89A3" },
   "edges": "#9FB4D9",
   "background": "#10131A",

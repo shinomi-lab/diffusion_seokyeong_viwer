@@ -53,11 +53,11 @@ fn round_csv_columns_and_rows() {
     let mut lines = csv.lines();
     assert_eq!(
         lines.next().unwrap(),
-        "round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all"
+        "round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all,rec_received,rec_share,rec_xact,chain_received,chain_xact,cum_rec"
     );
     let rows: Vec<Vec<&str>> = lines.map(|l| l.split(',').collect()).collect();
     assert_eq!(rows.len(), 4);
-    assert!(rows.iter().all(|r| r.len() == 16));
+    assert!(rows.iter().all(|r| r.len() == 22));
     assert_eq!(rows.iter().map(|r| r[1]).collect::<String>(), "0315");
     assert_eq!(rows[0][0], "1");
 }
@@ -66,7 +66,7 @@ fn round_csv_columns_and_rows() {
 fn events_csv_rows_match_events() {
     let s = run(ScenarioConfig::default(), "01");
     let csv = events_csv(&s, None);
-    assert!(csv.starts_with("round,wave,node,node_label,from,from_label,u_int,u_ext,kind\n"));
+    assert!(csv.starts_with("round,wave,node,node_label,from,from_label,u_int,u_ext,kind,via\n"));
     let total: u32 = s.summaries().map(|x| x.n_received).sum();
     assert_eq!(csv.lines().count() as u32, total + 1);
     let only2 = events_csv(&s, Some(2));

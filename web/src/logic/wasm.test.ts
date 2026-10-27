@@ -3,7 +3,7 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeAll, describe, expect, it } from 'vitest';
 import { initSync, Simulator } from '../wasm/sim_wasm.js';
-import { DEFAULT_MESSAGES, defaultForm, presetMechanisms, toConfigJson } from './config';
+import { DEFAULT_MESSAGES, DEFAULT_REC, defaultForm, formFromConfig, presetMechanisms, toConfigJson } from './config';
 import { emptyEvents, stateAtWave } from './frames';
 import type { EventCols, ParamSpec } from '../worker/protocol';
 
@@ -68,6 +68,27 @@ describe.skipIf(!have)('sim-wasm との照合（100random.txt）', () => {
         for (const [k, v] of Object.entries(vals)) expect(m[id][k]).toBeCloseTo(v as number, 12);
       }
     }
+    // 推薦の既定（off）と登録簿の既定が Rust 側と一致する
+    expect(setup('off').info.config.recommender).toEqual(DEFAULT_REC);
+    const recSpecs: ParamSpec[] = JSON.parse(new Simulator().recParamSpecs());
+    for (const p of recSpecs) expect(p.default).toBe(DEFAULT_REC[p.id.split('.')[1] as 'threshold']);
+    // 方式のキーが無い記録は基準として読む（Rust・画面とも。T-V08）
+    const s2 = new Simulator();
+    s2.loadGraph(GRAPH, JSON.stringify({ format: 'edgelist', directed: true, transposed: false }));
+    const legacy = { recommender: { enabled: true, threshold: 0.05 } };
+    expect(JSON.parse(s2.createScenario(JSON.stringify(legacy))).config.recommender.method).toBe('baseline');
+    expect(formFromConfig(defaultForm(specs), legacy).recommender.method).toBe('baseline');
+    expect(formFromConfig(defaultForm(specs), {}).recommender.method).toBe('hybrid');
+    // Rモデル（T-W08）: 新しいキーが無い記録は既定値で埋まり、方式は変わらない。wave は Rust でも読める
+    const v2 = { recommender: { enabled: true, method: 'hybrid' } };
+    const f2 = formFromConfig(defaultForm(specs), v2).recommender;
+    expect([f2.method, f2.eps, f2.near, f2.mu]).toEqual(['hybrid', DEFAULT_REC.eps, DEFAULT_REC.near, DEFAULT_REC.mu]);
+    const wave = { recommender: { enabled: true, method: 'wave', eps: 0.5 } };
+    const c3 = JSON.parse(s2.createScenario(JSON.stringify(wave))).config.recommender;
+    expect([c3.method, c3.eps, c3.delta]).toEqual(['wave', 0.5, 1.0]);
+    s2.setIp(0);
+    s2.step(0);
+    expect(JSON.parse(s2.recWaveTrace()).trace.length).toBeGreaterThan(0);
     const off = setup('off').info.config.mechanisms;
     expect(Object.values(off).every((v) => (v as { enabled: boolean }).enabled === false)).toBe(true);
   });

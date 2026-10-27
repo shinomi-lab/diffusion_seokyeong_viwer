@@ -2,7 +2,7 @@
 // MC の併記（F12: 平均と 10〜90% の帯）と、比較モード（F13）の B（破線）を同じ軸に重ねる。
 import { useMemo } from 'react';
 import { useCompare } from '../store/actions';
-import { useSession, useSessionB } from '../store/session';
+import { recOn, useSession, useSessionB } from '../store/session';
 import { T } from '../tokens';
 import { UPlotChart, type PlotSeries } from './Plot';
 
@@ -23,12 +23,20 @@ export function RoundChart() {
   const mc = useSession((s) => s.mc.result);
   const compare = useCompare((c) => c.enabled);
   const B = useSessionB((s) => s.rounds);
+  const rec = useSession(recOn);
 
   const counts = useMemo(() => {
     const c = empty(A.map((r) => r.summary.round));
     push(c, { label: '新規シェア', color: T.series.newShare }, A.map((r) => r.summary.n_share));
     push(c, { label: '新規外部行動', color: T.series.newXact }, A.map((r) => r.summary.new_xact));
     push(c, { label: '累積外部行動', color: T.series.cumXact }, A.map((r) => r.summary.cum_xact));
+    if (rec) {
+      // 推薦（recommender-design.md 8.4）。推薦 off では出さない
+      push(c, { label: '推薦経由の外部行動', color: T.series.recXact }, A.map((r) => r.summary.rec_xact + r.summary.chain_xact));
+      push(c, { label: '推薦で受信してシェア', color: T.series.recShare, dash: [2, 3] }, A.map((r) => r.summary.rec_share));
+      push(c, { label: '推薦で受信', color: T.series.recXact, dash: [8, 5] }, A.map((r) => r.summary.rec_received));
+      push(c, { label: '推薦で受信（累積人数）', color: T.series.recXact, dash: [14, 4, 3, 4] }, A.map((r) => r.summary.cum_rec));
+    }
     if (compare) {
       const pad = (f: (r: (typeof B)[number]) => number) => A.map((_, i) => (B[i] ? f(B[i]) : NaN));
       push(c, { label: 'B 新規シェア', color: T.series.newShare, dash: [6, 4] }, pad((r) => r.summary.n_share));
@@ -41,9 +49,16 @@ export function RoundChart() {
       const hi = push(c, { label: 'MC p90', color: T.series.both, hidden: true, width: 0 }, mc.cum_xact.p90);
       c.bands.push([hi, lo, T.series.both]);
       void m;
+      if (rec) {
+        // 推薦で受信（累積人数）の MC 平均と 10〜90% の帯
+        push(c, { label: 'MC 推薦で受信・累積（平均）', color: T.series.recXact, dash: [14, 4, 3, 4] }, mc.cum_rec.mean);
+        const rl = push(c, { label: 'MC 推薦 p10', color: T.series.recXact, hidden: true, width: 0 }, mc.cum_rec.p10);
+        const rh = push(c, { label: 'MC 推薦 p90', color: T.series.recXact, hidden: true, width: 0 }, mc.cum_rec.p90);
+        c.bands.push([rh, rl, T.series.recXact]);
+      }
     }
     return c;
-  }, [A, B, compare, mc]);
+  }, [A, B, compare, mc, rec]);
 
   const util = useMemo(() => {
     const c = empty(A.map((r) => r.summary.round));

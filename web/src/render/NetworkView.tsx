@@ -5,7 +5,7 @@ import { aggregateSectors, ringCount, ringTotals } from '../logic/sectors';
 import { boundsOf } from '../logic/layout';
 import { useDisplay } from '../store/display';
 import { SPEEDS, usePlayback } from '../store/playback';
-import { useSession, useSessionB } from '../store/session';
+import { recOn, useSession, useSessionB } from '../store/session';
 import { useView } from '../store/view';
 import { hexToRgb, KIND_LABELS, T } from '../tokens';
 import { sim } from '../worker/client';
@@ -195,7 +195,8 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
     const pulse = new Uint8Array(drawNodes.length);
     for (let j = 0; j < drawNodes.length; j++) {
       kinds[j] = display.kinds[drawNodes[j]];
-      pulse[j] = display.pulse[drawNodes[j]];
+      // bit0 = 現在のウェーブ、bit1 = 推薦で受信、bit2 = 推薦由来の連鎖（shaders.ts）
+      pulse[j] = display.pulse[drawNodes[j]] | (display.via[drawNodes[j]] << 1);
     }
     r.setStates(kinds, pulse);
     r.draw({ center: [camera.cx, camera.cy], zoom: camera.zoom, width: size.w, height: size.h, bg: hexToRgb(T.background) });
@@ -435,15 +436,27 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
 /** 凡例と再生の操作（A・B で共有）。 */
 export function PlayControls() {
   const intMode = useView((st) => st.intMode);
+  const recMode = useView((st) => st.recMode);
   const playing = usePlayback((st) => st.playing);
   const k = usePlayback((st) => st.k);
   const last = usePlayback((st) => st.last);
   const speed = usePlayback((st) => st.speed);
+  // フックは毎回同じ順で両方呼ぶ（|| で短絡させない）
+  const recA = useSession(recOn);
+  const recB = useSessionB(recOn);
+  const rec = recA || recB;
   const playback = usePlayback.getState();
   return (
       <div className="controls">
         <div className="legend" aria-label="凡例">
           {KIND_LABELS.map((label, i) => <LegendItem key={label} kind={i} label={label} />)}
+          {rec && (
+            <>
+              <span className="legend-item"><i style={{ background: T.highlight.recommended, border: `2px solid ${T.highlight.recommended}`, borderRadius: '50%' }} />推薦で受信</span>
+              <span className="legend-item"><i style={{ background: T.highlight.recommended, border: `2px solid ${T.kinds['2'].fill}`, borderRadius: '50%' }} />推薦・内部活性</span>
+              <span className="legend-item"><i style={{ background: T.highlight.recChain, borderRadius: '50%' }} />推薦由来</span>
+            </>
+          )}
         </div>
         <div className="playbar">
           <button title="コマ戻し (←)" disabled={k <= -1} onClick={() => playback.stepWave(-1)}>◀|</button>
@@ -459,6 +472,15 @@ export function PlayControls() {
               <option value={1}>このラウンドのみ</option>
             </select>
           </label>
+          {rec && (
+            <label className="int-mode" title="推薦で受信の色（黄色）を、一度でも推薦で受け取った人に残すか">
+              推薦:
+              <select value={recMode} onChange={(e) => useView.getState().setRecMode(Number(e.target.value) as 0 | 1)} data-testid="rec-mode">
+                <option value={0}>累積</option>
+                <option value={1}>このラウンドのみ</option>
+              </select>
+            </label>
+          )}
         </div>
       </div>
   );

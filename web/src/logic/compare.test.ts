@@ -48,7 +48,7 @@ describe.skipIf(!existsSync(wasmPath))('3 水準の流し比べ（100random.txt�
       const again = run(level, JSON.stringify(rec.config));
       expect(again.sim.exportRoundsCsv()).toBe(csv);
       table[level] = summaries.map((s: { cum_xact: number }) => s.cum_xact);
-      expect(csv.split('\n')[0]).toBe('round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all');
+      expect(csv.split('\n')[0]).toBe('round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all,rec_received,rec_share,rec_xact,chain_received,chain_xact,cum_rec');
       if (WRITE) {
         mkdirSync(OUT, { recursive: true });
         writeFileSync(new URL(`${level}.scenario.json`, OUT), json);

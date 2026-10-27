@@ -8,6 +8,41 @@ export const MECH_IDS: MechId[] = ['m1']; // , 'm5'
 export type MechValues = { enabled: boolean } & Record<string, number | boolean>;
 export type Mechanisms = Record<MechId, MechValues>;
 
+/** 推薦の方式: 基準（v1: 個人の反応率）／CF＋グラフ（v2）／Rモデル（v3: 波ごとの押し出し）。 */
+export type RecMethod = 'baseline' | 'hybrid' | 'wave';
+
+/** 推薦（recommender-design.md 5 章、recommender-v2-design.md 5 章）。キー名は sim-api の RecommenderConfig と同じ。 */
+export interface RecForm {
+  enabled: boolean;
+  method: RecMethod;
+  threshold: number;
+  w_share: number;
+  prior_n0: number;
+  alpha: number;
+  min_common: number;
+  // Rモデル（recommender-v3-design.md 5 章）
+  eps: number;
+  delta: number;
+  near: number;
+  tau: number;
+  phi_max: number;
+  k: number;
+  mu: number;
+}
+
+/** Rust 側の RecommenderConfig::default と一致する（logic/wasm.test.ts で確認）。 */
+export const DEFAULT_REC: RecForm = {
+  enabled: false, method: 'hybrid', threshold: 0.15, w_share: 0.5, prior_n0: 2.0, alpha: 0.5, min_common: 5,
+  eps: 1.0, delta: 1.0, near: 0.5, tau: 0.0, phi_max: 3.0, k: 10.0, mu: 1.0,
+};
+
+/** 方式ごとに使う推薦の項目（Rust 側の params::rec_param_used と同じ）。 */
+export function recParamUsed(method: RecMethod, id: string): boolean {
+  if (id === 'rec.threshold' || id === 'rec.w_share' || id === 'rec.prior_n0') return method !== 'wave';
+  if (id === 'rec.alpha' || id === 'rec.min_common') return method === 'hybrid';
+  return method === 'wave';
+}
+
 export interface DecisionForm {
   beta: number;
   gamma: number;
@@ -25,6 +60,7 @@ export interface ScenarioForm {
   external_parameters: DecisionForm;
   message_space: { internal_stimulus: number; external_stimulus: number }[];
   mechanisms: Mechanisms;
+  recommender: RecForm;
 }
 
 // 試作の既定（要件書 6.2・12.1）。Rust 側の ScenarioConfig::default と一致する（logic/config.test.ts で確認）。
@@ -73,6 +109,7 @@ export function defaultForm(specs: ParamSpec[]): ScenarioForm {
     external_parameters: { beta: 0.8, gamma: 0.6, initial_utility: -1 },
     message_space: DEFAULT_MESSAGES.map((m) => ({ ...m })),
     mechanisms: presetMechanisms('off', specs),
+    recommender: { ...DEFAULT_REC },
   };
 }
 
@@ -89,6 +126,7 @@ export function toConfigJson(f: ScenarioForm): string {
     message_space: f.message_space,
     mean_stimulus: { mode: 'auto' },
     mechanisms: f.mechanisms,
+    recommender: f.recommender,
   });
 }
 
@@ -98,5 +136,9 @@ export function formFromConfig(base: ScenarioForm, cfg: Record<string, unknown>)
   const mech = { ...base.mechanisms };
   const cm = (c.mechanisms ?? {}) as Partial<Mechanisms>;
   for (const m of MECH_IDS) if (cm[m]) mech[m] = { ...mech[m], ...cm[m] } as MechValues;
-  return { ...base, ...c, mechanisms: mech } as ScenarioForm;
+  // 推薦のキーが無い古い記録は off（Rust 側の serde(default) と同じ）
+  // 方式のキーが無い記録（v1 で保存）は基準として読む（Rust 側の serde と同じ。D-V4）
+  const cr = c.recommender as Partial<RecForm> | undefined;
+  const recommender = { ...DEFAULT_REC, ...(cr ? { method: 'baseline' as const } : {}), ...(cr ?? {}) };
+  return { ...base, ...c, mechanisms: mech, recommender } as ScenarioForm;
 }

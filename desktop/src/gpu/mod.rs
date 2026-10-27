@@ -32,6 +32,10 @@ pub struct Uniforms {
     fill: [[f32; 4]; 6],
     stroke: [[f32; 4]; 6],
     kind: [[f32; 4]; 6],
+    rec_color: [f32; 4],
+    chain_color: [f32; 4],
+    /// x = 推薦の縁取りの太さ px、y = 推薦由来の縁取りの太さ px
+    rec_ring: [f32; 4],
 }
 
 fn srgb_to_linear(c: f32) -> f32 {
@@ -105,6 +109,9 @@ impl Uniforms {
             fill,
             stroke,
             kind,
+            rec_color: col(t.rec, 1.0),
+            chain_color: col(t.rec_chain, 1.0),
+            rec_ring: [t.rec_ring_px, 0.0, 0.0, 0.0],
         }
     }
 }
@@ -115,7 +122,7 @@ pub struct Frame {
     pub uniforms: Uniforms,
     pub pos: Arc<Vec<f32>>,
     pub pos_ver: u64,
-    /// kind（下位 8 ビット）| pulse << 8
+    /// kind（下位 8 ビット）| pulse << 8（pulse: bit0 = 現在のウェーブ、bit1 = 推薦で受信、bit2 = 推薦由来の連鎖）
     pub attrs: Arc<Vec<u32>>,
     pub attr_ver: u64,
     pub edges: Arc<Vec<f32>>,

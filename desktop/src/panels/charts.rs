@@ -86,6 +86,15 @@ impl App {
             LegendEntry::new("新規外部行動", c_new, false),
             LegendEntry::new("累積外部行動", c_ext, false),
         ];
+        if self.rec_on(0) {
+            // 推薦（recommender-design.md 10 章）。推薦 off では出さない
+            v.extend([
+                LegendEntry::new("推薦経由の外部行動", col(t.series_rec_xact), false),
+                LegendEntry::new("推薦で受信してシェア", col(t.series_rec_share), true),
+                LegendEntry::new("推薦で受信", col(t.series_rec_xact), true),
+                LegendEntry::new("推薦で受信（累積人数）", col(t.series_rec_xact), true),
+            ]);
+        }
         if self.compare {
             v.extend([
                 LegendEntry::new("B 新規シェア", c_int, true),
@@ -102,6 +111,13 @@ impl App {
                     false,
                 ),
             ]);
+            if self.rec_on(0) {
+                v.push(LegendEntry::new(
+                    "MC 推薦で受信・累積（平均）",
+                    col(t.series_rec_xact),
+                    true,
+                ));
+            }
         }
         v
     }
@@ -200,6 +216,38 @@ impl App {
                     if is_visible(&hidden, "累積外部行動") {
                         p.line(line("累積外部行動", &|r| r.summary.cum_xact as f64, c_ext));
                     }
+                    if self.rec_on(0) {
+                        let c = col(self.tokens.series_rec_xact);
+                        if is_visible(&hidden, "推薦経由の外部行動") {
+                            p.line(line(
+                                "推薦経由の外部行動",
+                                &|r| (r.summary.rec_xact + r.summary.chain_xact) as f64,
+                                c,
+                            ));
+                        }
+                        if is_visible(&hidden, "推薦で受信してシェア") {
+                            p.line(
+                                line(
+                                    "推薦で受信してシェア",
+                                    &|r| r.summary.rec_share as f64,
+                                    col(self.tokens.series_rec_share),
+                                )
+                                .style(LineStyle::dotted_dense()),
+                            );
+                        }
+                        if is_visible(&hidden, "推薦で受信") {
+                            p.line(
+                                line("推薦で受信", &|r| r.summary.rec_received as f64, c)
+                                    .style(LineStyle::dashed_loose()),
+                            );
+                        }
+                        if is_visible(&hidden, "推薦で受信（累積人数）") {
+                            p.line(
+                                line("推薦で受信（累積人数）", &|r| r.summary.cum_rec as f64, c)
+                                    .style(LineStyle::dashed_dense()),
+                            );
+                        }
+                    }
                     if self.compare {
                         // 比較（F13）: B を破線で重ねる
                         let bx: Vec<f64> = self.slots[1]
@@ -252,6 +300,17 @@ impl App {
                             band_alpha,
                             &hidden,
                         );
+                        if self.rec_on(0) {
+                            band_lines(
+                                p,
+                                "MC 推薦で受信・累積（平均）",
+                                &mc.cum_rec,
+                                1.0,
+                                col(self.tokens.series_rec_xact),
+                                band_alpha,
+                                &hidden,
+                            );
+                        }
                     }
                 });
             legend_row(&mut cols[0], &counts_entries, &mut new_hidden);

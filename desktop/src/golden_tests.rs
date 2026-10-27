@@ -51,7 +51,7 @@ fn desktop_rounds(c: &GoldenCase) -> Vec<Value> {
         let events = o.events.clone();
         let last = o.summary.n_waves as i32 - 1;
         let ever = s.ever_flags();
-        let shown = state_at_wave(&ever_before, &events, last, IntMode::Cumulative, c.ip);
+        let shown = state_at_wave(&ever_before, &events, last, IntMode::Cumulative, c.ip, true);
         // 表示用の kinds は Session::kinds と一致する（画面は常にこちらを使う）
         let engine: Vec<u8> = s
             .kinds(IntMode::Cumulative)
@@ -96,6 +96,24 @@ fn golden_balanced_matches() {
     check(
         "balanced",
         include_str!("../../spec/fixtures/golden_balanced.json"),
+    );
+}
+
+#[test]
+fn golden_rec_matches() {
+    check("rec", include_str!("../../spec/fixtures/golden_rec.json"));
+}
+
+#[test]
+fn golden_wave_matches() {
+    check("wave", include_str!("../../spec/fixtures/golden_wave.json"));
+}
+
+#[test]
+fn golden_hybrid_matches() {
+    check(
+        "hybrid",
+        include_str!("../../spec/fixtures/golden_hybrid.json"),
     );
 }
 

@@ -42,7 +42,7 @@ export class NodeRenderer {
     gl.linkProgram(prog);
     if (!gl.getProgramParameter(prog, gl.LINK_STATUS)) throw new Error(`リンクに失敗: ${gl.getProgramInfoLog(prog)}`);
     this.prog = prog;
-    for (const n of ['u_center', 'u_zoom', 'u_res', 'u_radius', 'u_halo', 'u_kindScale', 'u_fill', 'u_stroke', 'u_strokeFrac', 'u_blue', 'u_green', 'u_bg', 'u_pulseColor']) {
+    for (const n of ['u_center', 'u_zoom', 'u_res', 'u_radius', 'u_halo', 'u_kindScale', 'u_fill', 'u_stroke', 'u_strokeFrac', 'u_blue', 'u_green', 'u_bg', 'u_pulseColor', 'u_recColor', 'u_chainColor', 'u_recRingPx']) {
       this.u[n] = gl.getUniformLocation(prog, n);
     }
     // 開発時のみ: 描画結果のピクセルを読む（Canvas2D の位置と合っているかを自動テストで確かめる用）
@@ -127,6 +127,9 @@ export class NodeRenderer {
     gl.uniform3fv(u.u_green, hexToRgb(split[1]));
     gl.uniform3fv(u.u_bg, p.bg);
     gl.uniform3fv(u.u_pulseColor, hexToRgb(T.highlight.currentWave));
+    gl.uniform3fv(u.u_recColor, hexToRgb(T.highlight.recommended));
+    gl.uniform3fv(u.u_chainColor, hexToRgb(T.highlight.recChain));
+    gl.uniform1f(u.u_recRingPx, T.highlight.recRingPx);
     gl.bindVertexArray(this.vao);
     gl.drawArraysInstanced(gl.TRIANGLE_STRIP, 0, 4, this.count);
     gl.bindVertexArray(null);

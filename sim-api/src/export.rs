@@ -5,7 +5,7 @@ use std::fmt::Write;
 use serde::{Deserialize, Serialize};
 
 use crate::config::ScenarioConfig;
-use crate::log::{Choice, IntMode, kind_of};
+use crate::log::{Choice, EV_REC, EV_RECCHAIN, IntMode, kind_of};
 use crate::session::{Scenario, Session};
 
 #[derive(Debug, thiserror::Error, PartialEq)]
@@ -149,7 +149,7 @@ impl ScenarioRecord {
     }
 }
 
-pub const ROUND_CSV_HEADER: &str = "round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all";
+pub const ROUND_CSV_HEADER: &str = "round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all,rec_received,rec_share,rec_xact,chain_received,chain_xact,cum_rec";
 
 /// ラウンド別結果。`mean_*`・分位点は受信済みノード、`*_all` は IP 以外の全ノード。
 pub fn round_rows_csv(s: &Session) -> String {
@@ -159,7 +159,7 @@ pub fn round_rows_csv(s: &Session) -> String {
         let (a, b) = (&r.recv, &r.all);
         let _ = writeln!(
             out,
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.round,
             r.choice.to_char(),
             r.n_share,
@@ -175,13 +175,20 @@ pub fn round_rows_csv(s: &Session) -> String {
             a.q_ext[1],
             a.q_ext[2],
             b.mean_int,
-            b.mean_ext
+            b.mean_ext,
+            r.rec_received,
+            r.rec_share,
+            r.rec_xact,
+            r.chain_received,
+            r.chain_xact,
+            r.cum_rec
         );
     }
     out
 }
 
-pub const EVENT_CSV_HEADER: &str = "round,wave,node,node_label,from,from_label,u_int,u_ext,kind";
+pub const EVENT_CSV_HEADER: &str =
+    "round,wave,node,node_label,from,from_label,u_int,u_ext,kind,via";
 
 /// ノード別イベント。`round` を指定するとそのラウンドだけ。`kind` はそのラウンド終了時の分類（累積）。
 pub fn events_csv(s: &Session, round: Option<u32>) -> String {
@@ -200,16 +207,27 @@ pub fn events_csv(s: &Session, round: Option<u32>) -> String {
             let kind = kind_of(flags[node], IntMode::Cumulative, node as u32 == s.ip());
             let _ = writeln!(
                 out,
-                "{},{},{},{},{},{},{},{},{}",
+                "{},{},{},{},{},{},{},{},{},{}",
                 rs.round,
                 ev.wave[k],
                 node,
                 labels[node],
                 ev.from[k],
-                labels[ev.from[k] as usize],
+                if ev.from[k] == crate::engine::FROM_REC {
+                    -1
+                } else {
+                    labels[ev.from[k] as usize]
+                },
                 ev.u_int[k],
                 ev.u_ext[k],
-                kind.name()
+                kind.name(),
+                if ev.flags[k] & EV_REC != 0 {
+                    "rec"
+                } else if ev.flags[k] & EV_RECCHAIN != 0 {
+                    "rec_chain"
+                } else {
+                    "follow"
+                }
             );
         }
     }
@@ -246,7 +264,7 @@ pub fn batch_toml(
     diffusion_sample_size: u32,
 ) -> Result<String, ExportError> {
     let c = &scn.cfg;
-    if c.mechanisms.any_enabled() {
+    if c.mechanisms.any_enabled() || c.recommender.enabled {
         return Err(ExportError::BatchIncompatible);
     }
     let mut s = String::new();

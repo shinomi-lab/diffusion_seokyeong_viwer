@@ -16,6 +16,22 @@ pub struct Population {
     /// 初期効用（M4 の忘却の戻り先）。
     pub u0_int: f64,
     pub u0_ext: f64,
+    /// 推薦の履歴 R: ノード × 種類（`rec_l` 個）× {受信, シェア, 外部行動}。添字 = node * rec_l + m。
+    /// 推薦 off では空のまま（INV-R5）。
+    pub rec_hist: Vec<[u16; 3]>,
+    /// 種類ごとの全体の合計 {受信, シェア, 外部行動}（q̄ の計算用）。
+    pub rec_total: Vec<[u32; 3]>,
+    /// 種類の数 L（推薦 off では 0）。
+    pub rec_l: usize,
+}
+
+impl Population {
+    /// 推薦の履歴を確保する（推薦 on のシナリオでだけ呼ぶ）。
+    pub fn enable_rec_history(&mut self, l: usize) {
+        self.rec_l = l;
+        self.rec_hist = vec![[0; 3]; self.states.len() * l];
+        self.rec_total = vec![[0; 3]; l];
+    }
 }
 
 /// runner の `DecisionParameters::sample_iter` と同じ式・評価順で重みを引く。
@@ -85,5 +101,8 @@ pub fn sample_population(
         recv_round: vec![0; n_nodes],
         u0_int,
         u0_ext,
+        rec_hist: Vec::new(),
+        rec_total: Vec::new(),
+        rec_l: 0,
     })
 }

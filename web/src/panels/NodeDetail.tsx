@@ -1,7 +1,7 @@
 // ノード詳細（F10・F19）。「ノード」「ノード群」のタブ。効用は 1 を超えても上限なしで表示する。
 import { useEffect, useMemo, useState } from 'react';
 import { chooseIpAll } from '../store/actions';
-import { useSession } from '../store/session';
+import { recHybrid, useSession } from '../store/session';
 import { useView } from '../store/view';
 import { T } from '../tokens';
 import { sim } from '../worker/client';
@@ -34,6 +34,7 @@ function SingleNode() {
   const rounds = useSession((s) => s.rounds);
   const ip = useSession((s) => s.ip);
   const [d, setD] = useState<NodeDetailJson | null>(null);
+  const hybrid = useSession(recHybrid);
 
   useEffect(() => {
     if (node === null || ip === null) {
@@ -62,14 +63,25 @@ function SingleNode() {
       <dl className="kv">
         <dt>内部が成立したラウンド</dt><dd>{d.int_rounds.length ? d.int_rounds.join(', ') : '—'}</dd>
         <dt>外部行動のラウンド</dt><dd>{d.ext_round ?? '—'}</dd>
+        {d.rec.length > 0 && <><dt>推薦で受け取ったラウンド</dt><dd data-testid="rec-rounds">{d.received.filter((r) => r.via === 1).map((r) => r.round).join(', ') || '—'}</dd></>}
       </dl>
       <table className="mini">
         <thead><tr><th>受信ラウンド</th><th>ウェーブ</th><th>受信元（ラベル）</th><th>経路数</th></tr></thead>
         <tbody>
           {d.received.length === 0 && <tr><td colSpan={4}>まだ受信していません</td></tr>}
-          {d.received.map((r) => <tr key={r.round}><td>{r.round}</td><td>{r.wave + 1}</td><td>{r.from_label}</td><td>{r.n_arr}</td></tr>)}
+          {d.received.map((r) => <tr key={r.round}><td>{r.round}</td><td>{r.wave + 1}</td><td>{r.via === 1 ? '推薦' : r.via === 2 ? `${r.from_label}（推薦由来）` : r.from_label}</td><td>{r.n_arr}</td></tr>)}
         </tbody>
       </table>
+      {d.rec.length > 0 && (
+        <table className="mini" data-testid="rec-table">
+          <caption>推薦のスコア（現在の履歴での推定）</caption>
+          <thead><tr><th>種類</th><th>受信回数</th><th>P̂ シェア</th><th>P̂ 外部行動</th>{hybrid && <><th>f_CF</th><th>f_G</th></>}<th>スコア</th></tr></thead>
+          <tbody>
+            {d.rec.map((r) => <tr key={r.m}><td>m{r.m}</td><td>{r.received}</td><td>{r.ps.toFixed(3)}</td><td>{r.px.toFixed(3)}</td>{hybrid && <><td>{r.f_cf.toFixed(3)}</td><td>{r.f_g.toFixed(3)}</td></>}<td>{r.f.toFixed(3)}</td></tr>)}
+          </tbody>
+        </table>
+      )}
+      {d.rec.length > 0 && hybrid && <p className="note">f_CF は次のラウンドに使う値（現在の履歴）、f_G は直近のラウンドの値（フォロー先のうちシェアした人の割合）。</p>}
       {!d.is_ip && <button onClick={() => void chooseIpAll(d.node)}>このノードを IP にする（履歴は消えます）</button>}
     </div>
   );

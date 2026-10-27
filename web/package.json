@@ -12,7 +12,8 @@
     "compare": "COMPARE=1 vitest run src/logic/compare.test.ts",
     "e2e:align": "node scripts/check-alignment.mjs",
     "e2e:p3": "node scripts/check-p3.mjs",
-    "e2e:media": "node scripts/check-media.mjs"
+    "e2e:media": "node scripts/check-media.mjs",
+    "e2e:rec": "node scripts/check-rec.mjs"
   },
   "dependencies": {
     "react": "^18.3.1",

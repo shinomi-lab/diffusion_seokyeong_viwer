@@ -267,6 +267,9 @@ fn w0_pop(n: usize) -> Population {
         recv_round: vec![0; n],
         u0_int: -1.0,
         u0_ext: -1.0,
+        rec_hist: Vec::new(),
+        rec_total: Vec::new(),
+        rec_l: 0,
     }
 }
 

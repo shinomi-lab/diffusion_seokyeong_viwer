@@ -5,11 +5,14 @@ use std::sync::Arc;
 use rand::SeedableRng;
 use sim_core::message::Message;
 
-use crate::config::{ConfigError, Mech, ScenarioConfig};
-use crate::engine::{NoTrace, Observer, RoundCounts, Scratch, run_round};
+use crate::config::{ConfigError, Mech, RecMethod, ScenarioConfig};
+use crate::engine::{
+    FROM_REC, NoTrace, Observer, ReceiveEvent, RoundCounts, Scratch, WaveCtx, WaveTraceRow,
+    run_round_rec,
+};
 use crate::graph_io::LoadedGraph;
 use crate::log::*;
-use crate::node::{EVER_EXT, EVER_INT, EVER_RECV};
+use crate::node::{EVER_EXT, EVER_INT, EVER_REC, EVER_RECV};
 use crate::population::{Population, sample_population};
 use crate::rng::SimRng;
 use crate::tree::{BranchTree, BranchTreeView};
@@ -23,15 +26,21 @@ pub struct Scenario {
     pub mean_int: f64,
     pub mean_ext: f64,
     pub initial: Population,
+    /// Rモデルの基準の反応率 ē0（初期状態から 1 回だけ計算する。`recommender-v3-design.md` 6.3）。
+    pub ebar0: f64,
 }
 
 impl Scenario {
     pub fn new(graph: LoadedGraph, cfg: ScenarioConfig) -> Result<Self, ConfigError> {
         cfg.validate(Some(graph.n_nodes))?;
         let (mean_int, mean_ext) = cfg.mean_stimuli()?;
-        let initial = sample_population(&cfg, graph.n_nodes, mean_int, mean_ext)?;
+        let mut initial = sample_population(&cfg, graph.n_nodes, mean_int, mean_ext)?;
+        if cfg.recommender.enabled {
+            initial.enable_rec_history(cfg.message_space.len());
+        }
         let mech = cfg.mech();
         let messages = cfg.messages();
+        let ebar0 = crate::recommend::base_share_rate(&initial, mean_int);
         Ok(Self {
             graph,
             cfg,
@@ -40,6 +49,7 @@ impl Scenario {
             mean_int,
             mean_ext,
             initial,
+            ebar0,
         })
     }
 }
@@ -75,7 +85,24 @@ struct Checkpoint {
     round: u32,
     pop: Population,
     rng: SimRng,
+    /// 推薦専用の乱数（INV-R4。Rモデルだけが引く）。
+    rec_rng: SimRng,
+    /// Rモデルの R3 の a_t（INV-W6）。
+    rec_a: f64,
     cum_xact: u32,
+}
+
+/// 推薦の履歴の更新用に、そのラウンドの全受信を集めながら元の観測者へ渡す。
+struct HistoryTee<'a, O: Observer> {
+    inner: &'a mut O,
+    seen: Vec<(u32, bool, bool)>,
+}
+
+impl<O: Observer> Observer for HistoryTee<'_, O> {
+    fn on_receive(&mut self, ev: &ReceiveEvent) {
+        self.seen.push((ev.node, ev.int_fired, ev.ext_fired));
+        self.inner.on_receive(ev);
+    }
 }
 
 const CHECKPOINT_EVERY: u32 = 8;
@@ -85,6 +112,10 @@ pub struct Session {
     ip: u32,
     pop: Population,
     rng: SimRng,
+    /// 推薦専用の乱数（Rモデルの抽選用。v1・v2 では引かない）。
+    rec_rng: SimRng,
+    /// Rモデルの R3 の事前分布の平均 a_t（a_1 = ē0。ラウンドを跨ぐ状態。INV-W6）。
+    rec_a: f64,
     round: u32,
     cum_xact: u32,
     log: UtilityLog,
@@ -109,10 +140,13 @@ impl Session {
             return Err(SessionError::InvalidIp(ip));
         }
         let pop = scn.initial.clone();
+        let rec_rng = crate::recommend::rec_rng(scn.cfg.diffusion_seed);
         let checkpoints = vec![Checkpoint {
             round: 0,
             pop: pop.clone(),
             rng: rng.clone(),
+            rec_rng: rec_rng.clone(),
+            rec_a: scn.ebar0,
             cum_xact: 0,
         }];
         let mut log = UtilityLog::new(n);
@@ -125,6 +159,8 @@ impl Session {
             ip,
             pop,
             rng,
+            rec_rng,
+            rec_a: scn.ebar0,
             round: 0,
             cum_xact: 0,
             log,
@@ -217,6 +253,10 @@ impl Session {
                     F_EVER_EXT
                 } else {
                     0
+                }) | (if s.flags & EVER_REC != 0 {
+                    F_EVER_REC
+                } else {
+                    0
                 })
             })
             .collect();
@@ -231,6 +271,9 @@ impl Session {
             }
             if ev.flags[k] & EV_EXT != 0 {
                 *f |= F_EXT_NOW;
+            }
+            if ev.flags[k] & EV_REC != 0 {
+                *f |= F_REC_NOW;
             }
         }
         self.log.push_row(
@@ -266,6 +309,17 @@ impl Session {
             n_int_active_now: n_int_now,
             recv: stats_of(ri, re),
             all: stats_of(ai, ae),
+            rec_received: counts.rec_received,
+            rec_share: counts.rec_share,
+            rec_xact: counts.rec_xact,
+            chain_received: counts.chain_received,
+            chain_xact: counts.chain_xact,
+            cum_rec: self
+                .pop
+                .states
+                .iter()
+                .filter(|s| s.flags & EVER_REC != 0)
+                .count() as u32,
         };
         // 分岐ツリー: 同じ選択の子があれば再利用し、無ければ新しい枝を作る
         let current = self.path.last().copied().unwrap_or(0);
@@ -283,6 +337,8 @@ impl Session {
                 round: self.round,
                 pop: self.pop.clone(),
                 rng: self.rng.clone(),
+                rec_rng: self.rec_rng.clone(),
+                rec_a: self.rec_a,
                 cum_xact: self.cum_xact,
             });
         }
@@ -294,19 +350,60 @@ impl Session {
         let scn = Arc::clone(&self.scenario);
         let mech = scn.mech;
         let Choice::Msg(id) = choice;
-        let counts = run_round(
-            &scn.graph.csr,
-            scn.cfg.receipt_probability,
-            &mut self.pop,
-            &mut self.scratch,
-            self.ip,
-            id,
-            &scn.messages[id as usize],
-            &mech,
-            round,
-            &mut self.rng,
-            obs,
-        );
+        let rec_cfg = scn.cfg.recommender.enabled.then_some(&scn.cfg.recommender);
+        // Rモデル: 推薦専用の乱数と R3 の a_t を渡す（他の方式では None）
+        let is_wave = rec_cfg.is_some_and(|r| r.method == RecMethod::Wave);
+        let wave_ctx = is_wave.then(|| WaveCtx {
+            rng: &mut self.rec_rng,
+            a_t: self.rec_a,
+            ebar0: scn.ebar0,
+        });
+        let counts = if rec_cfg.is_some() {
+            // 推薦 on: ラウンドの全受信を集め、終わりに履歴を更新する（INV-R5）
+            let mut tee = HistoryTee {
+                inner: obs,
+                seen: Vec::new(),
+            };
+            let c = run_round_rec(
+                &scn.graph.csr,
+                scn.cfg.receipt_probability,
+                &mut self.pop,
+                &mut self.scratch,
+                self.ip,
+                id,
+                &scn.messages[id as usize],
+                &mech,
+                rec_cfg,
+                wave_ctx,
+                round,
+                &mut self.rng,
+                &mut tee,
+            );
+            crate::recommend::update_history(&mut self.pop, id, tee.seen.into_iter());
+            c
+        } else {
+            run_round_rec(
+                &scn.graph.csr,
+                scn.cfg.receipt_probability,
+                &mut self.pop,
+                &mut self.scratch,
+                self.ip,
+                id,
+                &scn.messages[id as usize],
+                &mech,
+                None,
+                None,
+                round,
+                &mut self.rng,
+                obs,
+            )
+        };
+        if is_wave {
+            let r = &scn.cfg.recommender;
+            if r.eps * r.delta > 0.0 {
+                self.rec_a = r.mu * self.rec_a + (1.0 - r.mu) * counts.e_hat_end;
+            }
+        }
         self.cum_xact += counts.n_xact;
         counts
     }
@@ -329,6 +426,8 @@ impl Session {
         let cp_round = cp.round;
         self.pop = cp.pop.clone();
         self.rng = cp.rng.clone();
+        self.rec_rng = cp.rec_rng.clone();
+        self.rec_a = cp.rec_a;
         self.cum_xact = cp.cum_xact;
         for r in cp_round + 1..=round {
             let choice = self.history[r as usize - 1].choice;
@@ -422,7 +521,7 @@ impl Session {
             self.log
                 .row_flags(r as usize)
                 .iter()
-                .map(|&f| f >> 3)
+                .map(|&f| (f >> 3) & EVER_FLAGS_MASK)
                 .collect(),
         )
     }
@@ -448,7 +547,11 @@ impl Session {
     /// 現在のラウンド終了時の EVER_* ビット（EVER_RECV=1, EVER_INT=2, EVER_EXT=4）。
     pub fn ever_flags(&self) -> Vec<u8> {
         let r = self.log.n_rows() - 1;
-        self.log.row_flags(r).iter().map(|&f| f >> 3).collect()
+        self.log
+            .row_flags(r)
+            .iter()
+            .map(|&f| (f >> 3) & EVER_FLAGS_MASK)
+            .collect()
     }
 
     /// F19: ノード群の平均推移。
@@ -459,6 +562,61 @@ impl Session {
         int_mode: IntMode,
     ) -> crate::groups::GroupSeries {
         crate::groups::group_series(&self.log, self.ip, sel, at_round, int_mode)
+    }
+
+    /// 推薦のスコアの表（ノード詳細用。現在の履歴での値）。推薦 off では空。
+    pub fn rec_detail(&self, node: u32) -> Vec<crate::recommend::RecRow> {
+        if !self.scenario.cfg.recommender.enabled || node as usize >= self.pop.states.len() {
+            return Vec::new();
+        }
+        let cfg = &self.scenario.cfg.recommender;
+        let f_g = if cfg.method == crate::config::RecMethod::Hybrid {
+            self.last_graph_score(node)
+        } else {
+            0.0
+        };
+        crate::recommend::detail(&self.pop, node, cfg, f_g)
+    }
+
+    /// 直近のラウンドの社会的証明 f_G（`recommender-v2-design.md` 6.3）。① の送り手 = IP と、
+    /// 推薦によらずに受け取って次のウェーブへ送った人。イベント列から再計算する（状態は持たない。INV-V4）。
+    fn last_graph_score(&self, node: u32) -> f64 {
+        let Some(h) = self.history.last() else {
+            return 0.0;
+        };
+        let ev = &h.out.events;
+        let mut sent = vec![false; self.pop.states.len()];
+        sent[self.ip as usize] = true;
+        for k in 0..ev.len() {
+            if ev.flags[k] & EV_ENQ != 0 && ev.flags[k] & (EV_REC | EV_RECCHAIN) == 0 {
+                sent[ev.node[k] as usize] = true;
+            }
+        }
+        let pred = self.scenario.graph.csr.pred(node);
+        if pred.is_empty() {
+            return 0.0;
+        }
+        pred.iter().filter(|&&v| sent[v as usize]).count() as f64 / pred.len() as f64
+    }
+
+    /// Rモデル: 直近のラウンドのウェーブごとの推薦の推移（`recommender-v3-design.md` 6.3）。他の方式では空。
+    /// 巻き戻しは対象のラウンドまで再生するので、巻き戻したあとはそのラウンドの値になる。
+    pub fn rec_wave_trace(&self) -> &[WaveTraceRow] {
+        self.scratch.wave_trace()
+    }
+
+    /// Rモデル: 現在の R3 の a_t（次のラウンドに使う値）。
+    pub fn rec_prior(&self) -> f64 {
+        self.rec_a
+    }
+
+    /// 種類どうしの似かた（L×L、行優先。現在の履歴で計算）。推薦 off・基準では空（R12）。
+    pub fn rec_sim(&self) -> Vec<f64> {
+        let cfg = &self.scenario.cfg.recommender;
+        if !cfg.enabled || cfg.method != crate::config::RecMethod::Hybrid {
+            return Vec::new();
+        }
+        crate::recommend::item_sim(&self.pop, cfg.min_common)
     }
 
     pub fn node_detail(&self, node: u32) -> NodeDetail {
@@ -476,8 +634,19 @@ impl Session {
                     round,
                     wave: ev.wave[p] as u32,
                     from: ev.from[p],
-                    from_label: labels[ev.from[p] as usize],
+                    from_label: if ev.from[p] == FROM_REC {
+                        -1
+                    } else {
+                        labels[ev.from[p] as usize]
+                    },
                     n_arr: ev.n_arr[p],
+                    via: if ev.flags[p] & EV_REC != 0 {
+                        1
+                    } else if ev.flags[p] & EV_RECCHAIN != 0 {
+                        2
+                    } else {
+                        0
+                    },
                 });
                 if ev.flags[p] & EV_INT != 0 {
                     int_rounds.push(round);

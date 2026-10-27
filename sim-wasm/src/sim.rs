@@ -12,7 +12,7 @@ use sim_api::groups::GroupSel;
 use sim_api::log::{Choice, EventColumns, IntMode};
 use sim_api::mc::{McMode, McSpec, run_mc};
 use sim_api::overview::{self, N_SECTORS, RadialLayout, Rings};
-use sim_api::params::param_specs;
+use sim_api::params::{param_specs, rec_param_specs};
 use sim_api::session::{Scenario, Session};
 
 /// JS で扱える整数の上限（シード用）。
@@ -145,6 +145,11 @@ impl Sim {
         json(&param_specs())
     }
 
+    /// 推薦のスライダーの登録簿（`recommender-design.md` 5 章）。
+    pub fn rec_param_specs(&self) -> Result<String, String> {
+        json(&rec_param_specs())
+    }
+
     pub fn create_scenario(&mut self, config_json: &str) -> Result<String, String> {
         let (src, _) = self.source.as_ref().ok_or("グラフが未読み込みです")?;
         let cfg = ScenarioConfig::from_json(config_json).map_err(|e| e.to_string())?;
@@ -236,6 +241,23 @@ impl Sim {
         Ok(self.sess()?.ever_flags())
     }
 
+    /// 種類どうしの似かた（L×L、行優先）。推薦 off・基準では長さ 0（`recommender-v2-design.md` 7 章）。
+    pub fn rec_sim(&self) -> Result<Vec<f64>, String> {
+        Ok(self.sess()?.rec_sim())
+    }
+
+    /// Rモデル: 直近のラウンドの推薦の推移と、次のラウンドの事前の見込み a・基準 ē0（JSON）。
+    /// 方式 wave 以外では `trace` が空（`recommender-v3-design.md` 7 章）。
+    pub fn rec_wave_trace(&self) -> Result<String, String> {
+        let s = self.sess()?;
+        Ok(serde_json::json!({
+            "trace": s.rec_wave_trace(),
+            "prior": s.rec_prior(),
+            "ebar0": s.scenario().ebar0,
+        })
+        .to_string())
+    }
+
     pub fn kinds(&self, int_mode: u8) -> Result<Vec<u8>, String> {
         Ok(self
             .sess()?
@@ -250,7 +272,10 @@ impl Sim {
         if node as usize >= s.scenario().graph.n_nodes {
             return Err(format!("ノード番号 {node} は存在しません"));
         }
-        json(&s.node_detail(node))
+        // 推薦の表（`rec`、推薦 off では空）を足す
+        let mut v = serde_json::to_value(s.node_detail(node)).map_err(|e| e.to_string())?;
+        v["rec"] = serde_json::to_value(s.rec_detail(node)).map_err(|e| e.to_string())?;
+        Ok(v.to_string())
     }
 
     pub fn group_series(

@@ -247,6 +247,39 @@ impl App {
                 a.iter().map(|r| r.summary.cum_xact as f64).collect(),
             ),
         ];
+        if self.rec_on(0) {
+            // 推薦（画面の系列と同じ。推薦 off では出さない）
+            series.push(Self::series_of(
+                "推薦経由の外部行動",
+                &to_hex(t.series_rec_xact),
+                None,
+                false,
+                a.iter()
+                    .map(|r| (r.summary.rec_xact + r.summary.chain_xact) as f64)
+                    .collect(),
+            ));
+            series.push(Self::series_of(
+                "推薦で受信してシェア",
+                &to_hex(t.series_rec_share),
+                Some([2.0, 3.0]),
+                false,
+                a.iter().map(|r| r.summary.rec_share as f64).collect(),
+            ));
+            series.push(Self::series_of(
+                "推薦で受信",
+                &to_hex(t.series_rec_xact),
+                Some([8.0, 5.0]),
+                false,
+                a.iter().map(|r| r.summary.rec_received as f64).collect(),
+            ));
+            series.push(Self::series_of(
+                "推薦で受信（累積人数）",
+                &to_hex(t.series_rec_xact),
+                Some([4.0, 2.0]),
+                false,
+                a.iter().map(|r| r.summary.cum_rec as f64).collect(),
+            ));
+        }
         if self.compare {
             let b = &self.slots[1].rounds;
             let pad = |f: &dyn Fn(&crate::state::RoundData) -> f64| -> Vec<f64> {
