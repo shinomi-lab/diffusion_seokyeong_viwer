@@ -117,6 +117,11 @@ impl Simulator {
         self.inner.set_ip(node).map_err(e)
     }
 
+    #[wasm_bindgen(js_name = pickIp)]
+    pub fn pick_ip(&self, seed: u32) -> Result<u32, JsValue> {
+        self.inner.pick_ip(seed).map_err(e)
+    }
+
     #[wasm_bindgen(js_name = ringAngles)]
     pub fn ring_angles(&self) -> Result<Vec<f32>, JsValue> {
         self.inner.ring_angles().map_err(e)
@@ -169,11 +174,6 @@ impl Simulator {
     #[wasm_bindgen(js_name = everFlags)]
     pub fn ever_flags(&self) -> Result<Vec<u8>, JsValue> {
         self.inner.ever_flags().map_err(e)
-    }
-
-    #[wasm_bindgen(js_name = recSim)]
-    pub fn rec_sim(&self) -> Result<Vec<f64>, JsValue> {
-        self.inner.rec_sim().map_err(e)
     }
 
     /// Rモデルの推薦の推移（JSON: `{trace: [{wave, e_hat, budget, slots, miss}], prior, ebar0}`）。

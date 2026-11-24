@@ -145,7 +145,7 @@ impl Sim {
         json(&param_specs())
     }
 
-    /// 推薦のスライダーの登録簿（`recommender-design.md` 5 章）。
+    /// 推薦のスライダーの登録簿（`recommender-v3-design.md` 5 章）。
     pub fn rec_param_specs(&self) -> Result<String, String> {
         json(&rec_param_specs())
     }
@@ -203,6 +203,12 @@ impl Sim {
         Ok(out.to_string())
     }
 
+    /// ランダムな IP（全ノードから一様）。同じ seed なら同じノード。拡散の乱数は引かない。
+    pub fn pick_ip(&self, seed: u32) -> Result<u32, String> {
+        let n = self.scn()?.graph.csr.n_nodes();
+        sim_api::rng::pick_ip(n, seed as u64).ok_or("ノードがありません".to_string())
+    }
+
     pub fn reset(&mut self) -> Result<(), String> {
         let ip = self.sess()?.ip();
         let scn = Arc::clone(self.scn()?);
@@ -241,11 +247,6 @@ impl Sim {
         Ok(self.sess()?.ever_flags())
     }
 
-    /// 種類どうしの似かた（L×L、行優先）。推薦 off・基準では長さ 0（`recommender-v2-design.md` 7 章）。
-    pub fn rec_sim(&self) -> Result<Vec<f64>, String> {
-        Ok(self.sess()?.rec_sim())
-    }
-
     /// Rモデル: 直近のラウンドの推薦の推移と、次のラウンドの事前の見込み a・基準 ē0（JSON）。
     /// 方式 wave 以外では `trace` が空（`recommender-v3-design.md` 7 章）。
     pub fn rec_wave_trace(&self) -> Result<String, String> {
@@ -272,10 +273,7 @@ impl Sim {
         if node as usize >= s.scenario().graph.n_nodes {
             return Err(format!("ノード番号 {node} は存在しません"));
         }
-        // 推薦の表（`rec`、推薦 off では空）を足す
-        let mut v = serde_json::to_value(s.node_detail(node)).map_err(|e| e.to_string())?;
-        v["rec"] = serde_json::to_value(s.rec_detail(node)).map_err(|e| e.to_string())?;
-        Ok(v.to_string())
+        serde_json::to_string(&s.node_detail(node)).map_err(|e| e.to_string())
     }
 
     pub fn group_series(
