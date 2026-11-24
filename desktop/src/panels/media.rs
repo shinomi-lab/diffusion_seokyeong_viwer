@@ -246,25 +246,16 @@ impl App {
                 false,
                 a.iter().map(|r| r.summary.cum_xact as f64).collect(),
             ),
+            Self::series_of(
+                "累積シェア",
+                &to_hex(t.series_cum_share),
+                None,
+                false,
+                a.iter().map(|r| r.summary.cum_share as f64).collect(),
+            ),
         ];
         if self.rec_on(0) {
             // 推薦（画面の系列と同じ。推薦 off では出さない）
-            series.push(Self::series_of(
-                "推薦経由の外部行動",
-                &to_hex(t.series_rec_xact),
-                None,
-                false,
-                a.iter()
-                    .map(|r| (r.summary.rec_xact + r.summary.chain_xact) as f64)
-                    .collect(),
-            ));
-            series.push(Self::series_of(
-                "推薦で受信してシェア",
-                &to_hex(t.series_rec_share),
-                Some([2.0, 3.0]),
-                false,
-                a.iter().map(|r| r.summary.rec_share as f64).collect(),
-            ));
             series.push(Self::series_of(
                 "推薦で受信",
                 &to_hex(t.series_rec_xact),
@@ -278,35 +269,6 @@ impl App {
                 Some([4.0, 2.0]),
                 false,
                 a.iter().map(|r| r.summary.cum_rec as f64).collect(),
-            ));
-        }
-        if self.compare {
-            let b = &self.slots[1].rounds;
-            let pad = |f: &dyn Fn(&crate::state::RoundData) -> f64| -> Vec<f64> {
-                (0..a.len())
-                    .map(|i| b.get(i).map(f).unwrap_or(f64::NAN))
-                    .collect()
-            };
-            series.push(Self::series_of(
-                "B 新規シェア",
-                &c_int,
-                Some([6.0, 4.0]),
-                false,
-                pad(&|r| r.summary.n_share as f64),
-            ));
-            series.push(Self::series_of(
-                "B 新規外部行動",
-                &c_new,
-                Some([6.0, 4.0]),
-                false,
-                pad(&|r| r.summary.new_xact as f64),
-            ));
-            series.push(Self::series_of(
-                "B 累積外部行動",
-                &c_ext,
-                Some([6.0, 4.0]),
-                false,
-                pad(&|r| r.summary.cum_xact as f64),
             ));
         }
         let mut bands = Vec::new();
@@ -384,32 +346,6 @@ impl App {
             series.push(Self::series_of(&format!("{name} p90"), c, None, true, hi));
             let n = series.len();
             bands.push((n - 1, n - 2, c.clone()));
-        }
-        if self.compare {
-            let b = &self.slots[1].rounds;
-            let pad = |f: &dyn Fn(&sim_api::log::UtilityStats) -> f32| -> Vec<f64> {
-                (0..a.len())
-                    .map(|i| {
-                        b.get(i)
-                            .map(|r| f(&r.summary.recv) as f64)
-                            .unwrap_or(f64::NAN)
-                    })
-                    .collect()
-            };
-            series.push(Self::series_of(
-                "B 内部 平均",
-                &c_int,
-                Some([6.0, 4.0]),
-                false,
-                pad(&|s| s.mean_int),
-            ));
-            series.push(Self::series_of(
-                "B 外部 平均",
-                &c_ext,
-                Some([6.0, 4.0]),
-                false,
-                pad(&|s| s.mean_ext),
-            ));
         }
         SvgChart {
             title: "効用（受信済みノードの平均と 10〜90% の帯）".into(),

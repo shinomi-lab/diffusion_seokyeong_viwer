@@ -1,11 +1,9 @@
 //! 操作パネル（9.3）: グラフ設定 → シナリオ設定 → 機構 M1（`param_specs()` から自動生成）→ 推薦 → プリセット → IP 選択 → メッセージ → 発信。
 
 use eframe::egui::{self, RichText};
-use sim_api::config::{MechanismConfig, RecMethod, RecommenderConfig, ScenarioConfig};
+use sim_api::config::{MechanismConfig, RecommenderConfig, ScenarioConfig};
 use sim_api::graph_io::GraphFormat;
-use sim_api::params::{
-    ParamKind, ParamSpec, get_rec_value, param_specs, rec_param_specs, rec_param_used,
-};
+use sim_api::params::{ParamKind, ParamSpec, get_rec_value, param_specs, rec_param_specs};
 
 use crate::app::{App, Metric};
 
@@ -81,30 +79,13 @@ fn mechanism_editor(ui: &mut egui::Ui, mech: &mut MechanismConfig) {
     }
 }
 
-/// 推薦の編集（on/off と、`rec_param_specs()` から自動生成したスライダー。`recommender-design.md` 10 章）。A・B のどちらにも使う。
+/// 推薦（Rモデル）の編集（on/off と、`rec_param_specs()` から自動生成したスライダー）。A・B のどちらにも使う。
 fn recommender_editor(ui: &mut egui::Ui, rec: &mut RecommenderConfig) {
     ui.checkbox(&mut rec.enabled, RichText::new("推薦").strong())
-        .on_hover_text("フォロー経由の連鎖のあと、スコアが閾値以上の未受信者にも届ける");
+        .on_hover_text("各ウェーブのあと、反応率に応じた数だけフォロー外へ届ける（Rモデル）");
     let on = rec.enabled;
-    ui.add_enabled_ui(on, |ui| {
-        egui::ComboBox::from_label("方式")
-            .selected_text(match rec.method {
-                RecMethod::Hybrid => "CF＋グラフ（v2）",
-                RecMethod::Baseline => "基準（v1: 個人の反応率）",
-                RecMethod::Wave => "Rモデル（v3: 波ごとの押し出し）",
-            })
-            .show_ui(ui, |ui| {
-                ui.selectable_value(&mut rec.method, RecMethod::Hybrid, "CF＋グラフ（v2）");
-                ui.selectable_value(&mut rec.method, RecMethod::Baseline, "基準（v1: 個人の反応率）");
-                ui.selectable_value(&mut rec.method, RecMethod::Wave, "Rモデル（v3: 波ごとの押し出し）");
-            })
-            .response
-            .on_hover_text("基準: 本人の同じ種類の反応率。CF＋グラフ: 種類どうしの似かた（協調フィルタリング）とフォロー先のシェア（社会的証明）。Rモデル: 各ウェーブのあと、反応率に応じた数だけフォロー外へ届ける");
-    });
     for s in rec_param_specs() {
-        // 方式ごとに使う項目だけを有効にする
-        let usable = on && rec_param_used(rec.method, s.id);
-        ui.add_enabled_ui(usable, |ui| {
+        ui.add_enabled_ui(on, |ui| {
             let mut v = get_rec_value(rec, s.id).unwrap_or(0.0);
             ui.add(egui::Label::new(s.label).wrap());
             let mut sl = egui::Slider::new(&mut v, s.min.unwrap_or(0.0)..=s.max.unwrap_or(1.0));
@@ -113,14 +94,8 @@ fn recommender_editor(ui: &mut egui::Ui, rec: &mut RecommenderConfig) {
             }
             if ui.add(sl).changed() {
                 match s.id {
-                    "rec.threshold" => rec.threshold = v,
-                    "rec.w_share" => rec.w_share = v,
-                    "rec.prior_n0" => rec.prior_n0 = v,
-                    "rec.alpha" => rec.alpha = v,
-                    "rec.min_common" => rec.min_common = v.round().max(1.0) as u32,
                     "rec.eps" => rec.eps = v,
                     "rec.delta" => rec.delta = v,
-                    "rec.near" => rec.near = v,
                     "rec.tau" => rec.tau = v,
                     "rec.phi_max" => rec.phi_max = v,
                     "rec.k" => rec.k = v,
@@ -145,7 +120,6 @@ impl App {
                 crate::theme::card(ui, &t, |ui| self.ui_scenario_section(ui));
                 crate::theme::card(ui, &t, |ui| self.ui_mechanism_section(ui));
                 crate::theme::card(ui, &t, |ui| self.ui_recommender_section(ui));
-                crate::theme::card(ui, &t, |ui| self.ui_compare_section(ui));
                 self.ui_apply(ui);
                 crate::theme::card(ui, &t, |ui| self.ui_ip_section(ui));
                 crate::theme::card(ui, &t, |ui| self.ui_palette_section(ui));
@@ -257,7 +231,6 @@ impl App {
             .default_open(true)
             .show(ui, |ui| {
                 recommender_editor(ui, &mut self.slots[0].form.recommender);
-                self.ui_rec_sim(ui);
                 self.ui_rec_wave_trace(ui);
             });
     }
@@ -291,96 +264,6 @@ impl App {
                     ui.add(egui::Label::new(egui::RichText::new("基準 ē0 = 0 のため推薦しません（平均的なメッセージを初めて受け取ってシェアする人が母集団にいない）。較正 T や反応性を変えると変わります。").color(warn)).wrap());
                 }
                 ui.add(egui::Label::new(egui::RichText::new(format!("次のラウンドの事前の見込み a = {:.3}（ē0 = {:.3}）", session.rec_prior(), session.scenario().ebar0)).weak()).wrap());
-            });
-    }
-
-    /// 種類どうしの似かた（6×6、R12）。CF＋グラフのときだけ。ラウンドが進んだときだけ計算し直す。
-    fn ui_rec_sim(&mut self, ui: &mut egui::Ui) {
-        let slot = &mut self.slots[0];
-        let Some(session) = &slot.session else { return };
-        let n = slot.rounds.len();
-        if slot.rec_sim_cache.as_ref().is_none_or(|(r, _)| *r != n) {
-            slot.rec_sim_cache = Some((n, session.rec_sim()));
-        }
-        let Some((_, v)) = &slot.rec_sim_cache else {
-            return;
-        };
-        if v.is_empty() {
-            return;
-        }
-        let l = (v.len() as f64).sqrt().round() as usize;
-        let c = crate::panels::col(self.tokens.rec);
-        egui::CollapsingHeader::new("種類どうしの似かた（協調フィルタリング）")
-            .default_open(false)
-            .show(ui, |ui| {
-                egui::Grid::new("rec_sim").spacing([2.0, 2.0]).show(ui, |ui| {
-                    ui.label("");
-                    for k in 0..l {
-                        ui.strong(format!("m{k}"));
-                    }
-                    ui.end_row();
-                    for m in 0..l {
-                        ui.strong(format!("m{m}"));
-                        for k in 0..l {
-                            let x = v[m * l + k].clamp(0.0, 1.0);
-                            let bg = egui::Color32::from_rgba_unmultiplied(c.r(), c.g(), c.b(), (x * 255.0) as u8);
-                            // 黄色の塗りの上では暗い文字にする（濃いセルで明るい文字だと読めない）
-                            let text = egui::RichText::new(format!("{x:.2}"));
-                            let text = if x > 0.45 { text.color(egui::Color32::from_rgb(0x10, 0x13, 0x1A)) } else { text };
-                            egui::Frame::new().fill(bg).inner_margin(2.0).show(ui, |ui| {
-                                ui.label(text);
-                            });
-                        }
-                        ui.end_row();
-                    }
-                });
-                ui.add(egui::Label::new(egui::RichText::new("両方の種類を受け取った人の反応の似かた（0〜1）。濃いほど「同じ人に効く」と学ばれた組。対角は 1。").weak()).wrap());
-            });
-    }
-
-    /// 2 画面比較（F13）: 同じグラフ・IP・シード・選択で、設定だけを変えた B を A と並べる。
-    fn ui_compare_section(&mut self, ui: &mut egui::Ui) {
-        egui::CollapsingHeader::new(RichText::new("2 画面比較（A と B）").strong())
-            .default_open(true)
-            .show(ui, |ui| {
-                let mut on = self.compare;
-                if ui
-                    .add_enabled(
-                        self.slots[0].scenario.is_some(),
-                        egui::Checkbox::new(&mut on, "比較モード"),
-                    )
-                    .on_hover_text(
-                        "同じグラフ・IP・シード・選択で、機構の設定だけを変えた B を左右に並べる",
-                    )
-                    .changed()
-                {
-                    self.set_compare(on);
-                }
-                if !self.compare {
-                    return;
-                }
-                ui.add(
-                    egui::Label::new(
-                        "B の設定（機構・推薦）。A と同じ IP・同じ選択が B にも適用されます。",
-                    )
-                    .wrap(),
-                );
-                mechanism_editor(ui, &mut self.slots[1].form.mechanisms);
-                recommender_editor(ui, &mut self.slots[1].form.recommender);
-                let dirty = self.is_dirty_slot(1);
-                if ui
-                    .button(if dirty {
-                        "B に設定を適用 ●未適用"
-                    } else {
-                        "B に設定を適用"
-                    })
-                    .clicked()
-                {
-                    self.apply_b();
-                }
-                if let Some(e) = self.slots[1].error.clone() {
-                    ui.colored_label(egui::Color32::from_rgb(200, 40, 40), format!("B: {e}"));
-                }
             });
     }
 
@@ -506,6 +389,30 @@ impl App {
                         }
                     }
                 });
+                // ランダムに選ぶ（全ノードから一様）。seed が空なら時刻から作り、使った seed を表示する（同じ seed なら同じノード）
+                ui.horizontal(|ui| {
+                    ui.label("ランダム");
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.random_seed)
+                            .hint_text("seed（空なら自動）")
+                            .desired_width(110.0),
+                    );
+                    if ui.button("ランダムに選ぶ").clicked() {
+                        let seed = self.random_seed.trim().parse::<u32>().unwrap_or_else(|_| {
+                            std::time::SystemTime::now()
+                                .duration_since(std::time::UNIX_EPOCH)
+                                .map_or(0, |d| d.as_millis() as u32)
+                        }) as u64;
+                        let n_nodes = self.slots[0].scenario.as_ref().map_or(0, |s| s.graph.n_nodes);
+                        if let Some(n) = sim_api::rng::pick_ip(n_nodes, seed) {
+                            self.last_random_seed = Some(seed);
+                            self.choose_ip(n);
+                        }
+                    }
+                });
+                if let Some(seed) = self.last_random_seed {
+                    ui.label(format!("ランダム選択の seed: {seed}（同じ seed なら同じノード）"));
+                }
                 match self.ip {
                     Some(ip) => ui.label(format!("現在の IP: ノード {ip}")),
                     None => ui.label("IP が未選択です"),

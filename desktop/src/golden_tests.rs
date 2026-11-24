@@ -100,21 +100,8 @@ fn golden_balanced_matches() {
 }
 
 #[test]
-fn golden_rec_matches() {
-    check("rec", include_str!("../../spec/fixtures/golden_rec.json"));
-}
-
-#[test]
 fn golden_wave_matches() {
     check("wave", include_str!("../../spec/fixtures/golden_wave.json"));
-}
-
-#[test]
-fn golden_hybrid_matches() {
-    check(
-        "hybrid",
-        include_str!("../../spec/fixtures/golden_hybrid.json"),
-    );
 }
 
 #[test]

@@ -45,12 +45,16 @@ impl eframe::App for App {
         egui::TopBottomPanel::top("toolbar")
             .exact_height(48.0)
             .show(ctx, |ui| self.ui_toolbar(ui));
-        egui::SidePanel::left("control")
-            .frame(crate::theme::app_frame(&self.tokens))
-            .exact_width(280.0)
-            .resizable(false)
-            .show(ctx, |ui| self.ui_control(ui));
-        egui::TopBottomPanel::bottom("bottom")
+        // 隠したパネルは出さない。egui は出さなかった分を中央のパネルに回すので、図がその方向へ広がる
+        if self.show_left {
+            egui::SidePanel::left("control")
+                .frame(crate::theme::app_frame(&self.tokens))
+                .exact_width(280.0)
+                .resizable(false)
+                .show(ctx, |ui| self.ui_control(ui));
+        }
+        if self.show_bottom {
+            egui::TopBottomPanel::bottom("bottom")
             .exact_height(280.0)
             .show(ctx, |ui| {
                 let w = ui.available_width();
@@ -68,14 +72,17 @@ impl eframe::App for App {
                     );
                 });
             });
-        egui::SidePanel::right("detail")
-            .exact_width(340.0)
-            .resizable(false)
-            .show(ctx, |ui| {
-                let w = ui.available_width();
-                ui.set_max_width(w);
-                self.ui_detail(ui)
-            });
+        }
+        if self.show_right {
+            egui::SidePanel::right("detail")
+                .exact_width(340.0)
+                .resizable(false)
+                .show(ctx, |ui| {
+                    let w = ui.available_width();
+                    ui.set_max_width(w);
+                    self.ui_detail(ui)
+                });
+        }
         egui::CentralPanel::default().show(ctx, |ui| {
             ui.spacing_mut().item_spacing.y = 3.0;
             self.ui_network(ui)
@@ -86,7 +93,7 @@ impl eframe::App for App {
 }
 
 impl App {
-    /// キーボード: 1〜6 でメッセージ選択、Enter で発信、Space で再生／一時停止、←→ で 1 ウェーブ戻る／進む（11.3）。
+    /// キーボード: 1〜6 でメッセージ選択、Enter で発信、Space で再生／一時停止、←→ で 1 ウェーブ戻る／進む（11.3）、[ ] \ で左・右・下のパネルを隠す／出す。
     fn handle_keys(&mut self, ctx: &egui::Context) {
         if ctx.wants_keyboard_input() {
             return;
@@ -103,15 +110,25 @@ impl App {
             egui::Key::Num8,
             egui::Key::Num9,
         ];
-        let (pressed, enter, space, left, right) = ctx.input(|i| {
+        let (pressed, enter, space, left, right, panels) = ctx.input(|i| {
             (
                 keys.iter().position(|&k| i.key_pressed(k)),
                 i.key_pressed(egui::Key::Enter),
                 i.key_pressed(egui::Key::Space),
                 i.key_pressed(egui::Key::ArrowLeft),
                 i.key_pressed(egui::Key::ArrowRight),
+                [
+                    i.key_pressed(egui::Key::OpenBracket),
+                    i.key_pressed(egui::Key::CloseBracket),
+                    i.key_pressed(egui::Key::Backslash),
+                ],
             )
         });
+        for (i, on) in panels.iter().enumerate() {
+            if *on {
+                self.toggle_panel(i);
+            }
+        }
         if let Some(i) = pressed {
             if i < n {
                 self.palette = i as i32;
@@ -171,16 +188,6 @@ impl App {
             .map(|c| c.to_digit(16).map(|d| d as i32).unwrap_or(-1))
             .collect();
         if self.playback.playing {
-            return;
-        }
-        // 2 画面比較（F13）: B は機構を「既定」にして、A と同じ IP・同じ選択で並べる
-        if self.cli.compare && !demo.compare_started {
-            demo.compare_started = true;
-            self.set_compare(true);
-            if self.slots.len() > 1 {
-                self.slots[1].form.mechanisms = sim_api::config::MechanismConfig::balanced();
-                self.apply_b();
-            }
             return;
         }
         if demo.step < seq.len() {

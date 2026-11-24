@@ -65,7 +65,7 @@ impl App {
             }
             ui.separator();
             let ctx = ui.ctx().clone();
-            if ui.add_enabled(self.slots[0].session.is_some(), egui::Button::new("画像 (PNG)")).on_hover_text("ネットワーク図を PNG で保存（比較中は A と B を左右に並べる）").clicked() {
+            if ui.add_enabled(self.slots[0].session.is_some(), egui::Button::new("画像 (PNG)")).on_hover_text("ネットワーク図を PNG で保存").clicked() {
                 if let Some(p) = rfd::FileDialog::new().set_file_name("network.png").add_filter("PNG", &["png"]).save_file() {
                     let rect = self.net_rect;
                     self.request_crop(&ctx, rect, p);

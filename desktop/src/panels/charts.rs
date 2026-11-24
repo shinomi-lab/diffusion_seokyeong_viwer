@@ -72,7 +72,7 @@ fn col_a_c(c: Color32, a: f32) -> Color32 {
 }
 
 impl App {
-    /// 「ラウンド別の人数」の凡例（A・B・MC の系列。帯用の補助系列は出さない）。
+    /// 「ラウンド別の人数」の凡例（A・MC の系列。帯用の補助系列は出さない）。
     fn counts_legend(&self) -> Vec<LegendEntry> {
         let t = &self.tokens;
         let (c_int, c_ext, c_new, c_both) = (
@@ -85,21 +85,13 @@ impl App {
             LegendEntry::new("新規シェア", c_int, false),
             LegendEntry::new("新規外部行動", c_new, false),
             LegendEntry::new("累積外部行動", c_ext, false),
+            LegendEntry::new("累積シェア", col(t.series_cum_share), false),
         ];
         if self.rec_on(0) {
-            // 推薦（recommender-design.md 10 章）。推薦 off では出さない
+            // 推薦（Rモデル。recommender-v3-design.md 9 章）。推薦 off では出さない
             v.extend([
-                LegendEntry::new("推薦経由の外部行動", col(t.series_rec_xact), false),
-                LegendEntry::new("推薦で受信してシェア", col(t.series_rec_share), true),
                 LegendEntry::new("推薦で受信", col(t.series_rec_xact), true),
                 LegendEntry::new("推薦で受信（累積人数）", col(t.series_rec_xact), true),
-            ]);
-        }
-        if self.compare {
-            v.extend([
-                LegendEntry::new("B 新規シェア", c_int, true),
-                LegendEntry::new("B 新規外部行動", c_new, true),
-                LegendEntry::new("B 累積外部行動", c_ext, true),
             ]);
         }
         if self.slots[0].mc_result.is_some() {
@@ -129,12 +121,6 @@ impl App {
             LegendEntry::new("内部", c_int, false),
             LegendEntry::new("外部", c_ext, false),
         ];
-        if self.compare {
-            v.extend([
-                LegendEntry::new("B 内部 平均", c_int, true),
-                LegendEntry::new("B 外部 平均", c_ext, true),
-            ]);
-        }
         if self.slots[0].mc_result.is_some() {
             v.extend([
                 LegendEntry::new("MC 内部 平均", c_int, true),
@@ -216,25 +202,15 @@ impl App {
                     if is_visible(&hidden, "累積外部行動") {
                         p.line(line("累積外部行動", &|r| r.summary.cum_xact as f64, c_ext));
                     }
+                    if is_visible(&hidden, "累積シェア") {
+                        p.line(line(
+                            "累積シェア",
+                            &|r| r.summary.cum_share as f64,
+                            col(self.tokens.series_cum_share),
+                        ));
+                    }
                     if self.rec_on(0) {
                         let c = col(self.tokens.series_rec_xact);
-                        if is_visible(&hidden, "推薦経由の外部行動") {
-                            p.line(line(
-                                "推薦経由の外部行動",
-                                &|r| (r.summary.rec_xact + r.summary.chain_xact) as f64,
-                                c,
-                            ));
-                        }
-                        if is_visible(&hidden, "推薦で受信してシェア") {
-                            p.line(
-                                line(
-                                    "推薦で受信してシェア",
-                                    &|r| r.summary.rec_share as f64,
-                                    col(self.tokens.series_rec_share),
-                                )
-                                .style(LineStyle::dotted_dense()),
-                            );
-                        }
                         if is_visible(&hidden, "推薦で受信") {
                             p.line(
                                 line("推薦で受信", &|r| r.summary.rec_received as f64, c)
@@ -246,39 +222,6 @@ impl App {
                                 line("推薦で受信（累積人数）", &|r| r.summary.cum_rec as f64, c)
                                     .style(LineStyle::dashed_dense()),
                             );
-                        }
-                    }
-                    if self.compare {
-                        // 比較（F13）: B を破線で重ねる
-                        let bx: Vec<f64> = self.slots[1]
-                            .rounds
-                            .iter()
-                            .map(|r| r.summary.round as f64)
-                            .collect();
-                        let bl = |name: &str,
-                                  f: &dyn Fn(&crate::state::RoundData) -> f64,
-                                  c: Color32| {
-                            Line::new(
-                                name.to_string(),
-                                PlotPoints::new(
-                                    bx.iter()
-                                        .zip(&self.slots[1].rounds)
-                                        .map(|(&x, r)| [x, f(r)])
-                                        .collect(),
-                                ),
-                            )
-                            .color(c)
-                            .width(1.6)
-                            .style(LineStyle::dashed_dense())
-                        };
-                        if is_visible(&hidden, "B 新規シェア") {
-                            p.line(bl("B 新規シェア", &|r| r.summary.n_share as f64, c_int));
-                        }
-                        if is_visible(&hidden, "B 新規外部行動") {
-                            p.line(bl("B 新規外部行動", &|r| r.summary.new_xact as f64, c_new));
-                        }
-                        if is_visible(&hidden, "B 累積外部行動") {
-                            p.line(bl("B 累積外部行動", &|r| r.summary.cum_xact as f64, c_ext));
                         }
                     }
                     if let Some(mc) = &self.slots[0].mc_result {
@@ -384,34 +327,6 @@ impl App {
                                 .fill(floor)
                                 .fill_alpha(0.10),
                         );
-                    }
-                    if self.compare {
-                        // 比較（F13）: B の効用の平均を破線で重ねる
-                        let b: Vec<(f64, &sim_api::log::UtilityStats)> = self.slots[1]
-                            .rounds
-                            .iter()
-                            .map(|r| (r.summary.round as f64, &r.summary.recv))
-                            .collect();
-                        let bi: Vec<[f64; 2]> =
-                            b.iter().map(|(x, st)| [*x, st.mean_int as f64]).collect();
-                        let be: Vec<[f64; 2]> =
-                            b.iter().map(|(x, st)| [*x, st.mean_ext as f64]).collect();
-                        if is_visible(&hidden, "B 内部 平均") {
-                            p.line(
-                                Line::new("B 内部 平均", PlotPoints::new(bi))
-                                    .color(c_int)
-                                    .width(1.6)
-                                    .style(LineStyle::dashed_dense()),
-                            );
-                        }
-                        if is_visible(&hidden, "B 外部 平均") {
-                            p.line(
-                                Line::new("B 外部 平均", PlotPoints::new(be))
-                                    .color(c_ext)
-                                    .width(1.6)
-                                    .style(LineStyle::dashed_dense()),
-                            );
-                        }
                     }
                     if let Some(mc) = &self.slots[0].mc_result {
                         if is_visible(&hidden, "MC 内部 平均") {

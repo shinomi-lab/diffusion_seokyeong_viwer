@@ -2,7 +2,7 @@
 //! Web 版の `logic/frames.ts`（`stateAtWave`）と同じ規則。T-19: T-18 と同じ入力で同じ出力。
 
 use sim_api::log::{
-    EV_EXT, EV_INT, EV_REC, EV_RECCHAIN, EVER_FLAG_REC, EventColumns, IntMode, NodeKind,
+    EV_EXT, EV_INT, EV_REC, EVER_FLAG_REC, EventColumns, IntMode, NodeKind,
 };
 use sim_api::node::{EVER_EXT, EVER_INT, EVER_RECV};
 
@@ -79,9 +79,8 @@ pub fn state_at_wave(
         }
         if ev.flags[i] & EV_REC != 0 {
             via[node] = 1;
-        } else if ev.flags[i] & EV_RECCHAIN != 0 && via[node] == 0 {
-            via[node] = 2;
         }
+        // 推薦由来の連鎖（EV_RECCHAIN）は図に出さない（2026-10-28）。イベント列と CSV には残る
     }
     let kinds = (0..n)
         .map(|j| kind_of(ever[j], int_now[j], j as u32 == ip, int_mode))
@@ -169,6 +168,7 @@ impl Playback {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use sim_api::log::EV_RECCHAIN;
 
     fn events(rows: &[(u16, u32, u32, u8)]) -> EventColumns {
         let mut e = EventColumns::default();
@@ -274,8 +274,8 @@ mod tests {
         }
         let before = vec![0, 1 | EVER_FLAG_REC, 0, 0];
         let c = |k, cum| state_at_wave(&before, &ev, k, IntMode::Cumulative, 0, cum).via;
-        assert_eq!(c(1, true), vec![0, 1, 2, 1]);
-        assert_eq!(c(1, false), vec![0, 0, 2, 1]);
+        assert_eq!(c(1, true), vec![0, 1, 0, 1]);
+        assert_eq!(c(1, false), vec![0, 0, 0, 1]);
         assert_eq!(c(-1, true), vec![0, 1, 0, 0]);
     }
 }

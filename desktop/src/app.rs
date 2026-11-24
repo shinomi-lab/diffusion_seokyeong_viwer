@@ -97,7 +97,6 @@ pub struct DemoState {
     pub expanded: bool,
     pub mc_started: Option<(Instant, u32)>,
     pub exported: bool,
-    pub compare_started: bool,
     pub branch_stage: u8,
     pub branch_orig: Vec<String>,
     pub branch_tail: u32,
@@ -126,8 +125,6 @@ pub struct Slot {
     pub sectors: Vec<overview::RingSectorCell>,
     pub sectors_key: Option<(usize, i32, bool, u32)>,
     pub detail_cache: Option<(u32, usize, sim_api::log::NodeDetail)>,
-    /// 種類どうしの似かた（R12）。(ラウンド数, L×L)。巻き戻し・枝の切り替えで消す。
-    pub rec_sim_cache: Option<(usize, Vec<f64>)>,
     pub mc_rx: Option<Receiver<McResult>>,
     pub mc_running: bool,
     pub mc_result: Option<McResult>,
@@ -154,7 +151,6 @@ impl Slot {
             sectors: Vec::new(),
             sectors_key: None,
             detail_cache: None,
-            rec_sim_cache: None,
             mc_rx: None,
             mc_running: false,
             mc_result: None,
@@ -165,12 +161,15 @@ impl Slot {
 
 pub struct App {
     pub tokens: Tokens,
-    /// 比較（F13）の A = 0、B = 1。比較がオフのときは長さ 1。
+    /// スロット（長さ 1。`slots[0]` が現在のセッション）。
     pub slots: Vec<Slot>,
-    pub compare: bool,
-    /// いま描画・入力の対象にしているスロット（`ui_network` が A・B を順に切り替える）。
+    /// いま描画・入力の対象にしているスロット。
     pub cur: usize,
     /// 凡例で非表示にされた系列名（時系列グラフ。A・B・MC で共通）。
+    /// パネルを隠しているか（左の設定・右のノード状態・下のグラフと選んだ系列）。隠した側へネットワーク図が広がる。
+    pub show_left: bool,
+    pub show_right: bool,
+    pub show_bottom: bool,
     pub hidden_series: std::collections::HashSet<String>,
     /// ネットワーク図の領域全体（比較中は A・B を含む）。画像・連番 PNG の切り出しに使う。
     pub net_rect: egui::Rect,
@@ -194,6 +193,9 @@ pub struct App {
     pub ranking: Vec<u32>,
     pub vc_scores: Option<Vec<f64>>,
     pub manual_ip: String,
+    /// ランダム IP の seed 欄（空なら時刻から作る）と、直近に使った seed。
+    pub random_seed: String,
+    pub last_random_seed: Option<u64>,
     pub ip: Option<u32>,
 
     // 表示
@@ -297,7 +299,6 @@ impl App {
             expanded: false,
             mc_started: None,
             exported: false,
-            compare_started: false,
             branch_stage: 0,
             branch_orig: Vec::new(),
             branch_tail: 0,
@@ -318,8 +319,10 @@ impl App {
         let mut app = Self {
             tokens,
             slots: vec![Slot::new(ScenarioConfig::default())],
-            compare: false,
             cur: 0,
+            show_left: !cli.hide_panels.as_deref().is_some_and(|h| h.split(',').any(|p| p.trim() == "left")),
+            show_right: !cli.hide_panels.as_deref().is_some_and(|h| h.split(',').any(|p| p.trim() == "right")),
+            show_bottom: !cli.hide_panels.as_deref().is_some_and(|h| h.split(',').any(|p| p.trim() == "bottom")),
             hidden_series: cli
                 .hide
                 .iter()
@@ -342,6 +345,8 @@ impl App {
             ranking: Vec::new(),
             vc_scores: None,
             manual_ip: String::new(),
+            random_seed: String::new(),
+            last_random_seed: None,
             ip: None,
             view: View::default(),
             playback: Playback::default(),
@@ -361,20 +366,9 @@ impl App {
             frame_ms: 0.0,
             last_frame: Instant::now(),
         };
-        if let Some(th) = cli.rec {
-            app.slots[0].form.recommender = sim_api::config::RecommenderConfig {
-                enabled: true,
-                threshold: th,
-                ..Default::default()
-            };
-            if cli.rec_baseline {
-                app.slots[0].form.recommender.method = sim_api::config::RecMethod::Baseline;
-            }
-        }
         if let Some(eps) = cli.rec_wave {
             app.slots[0].form.recommender = sim_api::config::RecommenderConfig {
                 enabled: true,
-                method: sim_api::config::RecMethod::Wave,
                 eps,
                 ..Default::default()
             };
@@ -483,11 +477,21 @@ impl App {
         }
     }
 
+    /// パネルの表示・非表示（0 = 左、1 = 右、2 = 下）。図の大きさが変わるので、カメラを合わせ直す。
+    pub fn toggle_panel(&mut self, i: usize) {
+        match i {
+            0 => self.show_left = !self.show_left,
+            1 => self.show_right = !self.show_right,
+            _ => self.show_bottom = !self.show_bottom,
+        }
+        self.view.refit = true;
+    }
+
     pub fn is_dirty(&self) -> bool {
         self.is_dirty_slot(0)
     }
 
-    /// 適用済みのシナリオで推薦が on か（`slot`: A = 0 / B = 1）。
+    /// 適用済みのシナリオで推薦が on か。
     pub fn rec_on(&self, slot: usize) -> bool {
         self.slots
             .get(slot)
@@ -536,7 +540,6 @@ impl App {
             s.ever.clear();
             s.display = None;
             s.detail_cache = None;
-            s.rec_sim_cache = None;
             s.mc_result = None;
             s.sectors_key = None;
             s.scene = SceneCache::default();
@@ -629,20 +632,12 @@ impl App {
         Choice::Msg(self.palette.max(0) as u8)
     }
 
-    /// 選ばれているメッセージで 1 ラウンド発信し、再生を始める。比較中は A・B が必ず同じ選択を受け取り、
-    /// どちらかが発信できないときは、先に進んだ側も取り消して揃える。
+    /// 選ばれているメッセージで 1 ラウンド発信し、再生を始める。
     pub fn send(&mut self) {
         if self.playback.playing {
             return;
         }
         if !self.can_send() {
-            // 比較中、B だけが発信できない理由を示す
-            for i in 1..self.slots.len() {
-                if !self.slot_can_send(i) {
-                    self.slots[i].error =
-                        Some("B では発信できません（実行ラウンド数の上限に達した）".into());
-                }
-            }
             return;
         }
         let choice = self.current_choice();
@@ -704,7 +699,6 @@ impl App {
         slot.display = None;
         slot.mc_result = None;
         slot.detail_cache = None;
-        slot.rec_sim_cache = None;
     }
 
     /// 再生位置を、全スロットの最後のラウンドの終端に合わせる。
@@ -772,86 +766,7 @@ impl App {
             slot.display = None;
             slot.mc_result = None;
             slot.detail_cache = None;
-            slot.rec_sim_cache = None;
         }
-        self.sync_playback_to_end();
-    }
-
-    // ---- 比較（F13） ----
-
-    /// 比較モードのオン・オフ。オンにすると、B に A と同じグラフを読み込み、A の設定を複製して、同じ IP・同じ選択を再現する。
-    pub fn set_compare(&mut self, on: bool) {
-        if on == self.compare {
-            return;
-        }
-        self.compare = on;
-        if !on {
-            self.slots.truncate(1);
-            self.view.refit = true;
-            return;
-        }
-        let form_b = self.slots[0].form.clone();
-        self.slots.push(Slot::new(form_b));
-        self.apply_b();
-    }
-
-    /// B の設定でシナリオを作り直し、A と同じ IP・同じ現在の枝の選択を再現する（A はそのまま）。
-    pub fn apply_b(&mut self) {
-        if self.slots.len() < 2 {
-            return;
-        }
-        let Some(bytes) = self.graph_bytes.clone() else {
-            return;
-        };
-        self.slots[1].error = None;
-        match self.build_scenario(bytes, 1) {
-            Ok(scn) => {
-                self.slots[1].applied_json =
-                    serde_json::to_string(&self.slots[1].form).unwrap_or_default();
-                self.slots[1].scenario = Some(Arc::new(scn));
-            }
-            Err(e) => {
-                self.slots[1].error = Some(e);
-                return;
-            }
-        }
-        let Some(ip) = self.ip else { return };
-        let choices = self.slots[0].choices.clone();
-        let scn = self.slots[1].scenario.clone().expect("直前に作った");
-        let session = Session::new(Arc::clone(&scn), ip);
-        let rings = overview::compute_rings(&scn.graph.csr, ip);
-        let layout = overview::radial_layout(&scn.graph.csr, &rings, ip);
-        let b = &mut self.slots[1];
-        b.positions = Some(compute_positions(&layout.angle, &rings.dist));
-        b.rings = Some(rings);
-        b.layout = Some(layout);
-        b.rounds.clear();
-        b.choices.clear();
-        b.display = None;
-        b.mc_result = None;
-        b.scene = SceneCache::default();
-        match session {
-            Ok(s) => {
-                b.ever = s.ever_flags();
-                b.session = Some(s);
-            }
-            Err(e) => {
-                b.error = Some(e.to_string());
-                return;
-            }
-        }
-        for (k, c) in choices.iter().enumerate() {
-            if let Err(e) = self.step_slot(1, *c) {
-                self.slots[1].error = Some(format!(
-                    "B は A の {} ラウンド目の選択を再現できません（{e}）。B の実行ラウンド数の上限などを確認してください",
-                    k + 1
-                ));
-                break;
-            }
-        }
-        self.view.refit = true;
-        self.rebuild_scene(0);
-        self.rebuild_scene(1);
         self.sync_playback_to_end();
     }
 

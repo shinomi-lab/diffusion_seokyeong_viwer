@@ -65,7 +65,6 @@ impl App {
         let avail = ui.available_size();
         let canvas = vec2(avail.x, (avail.y - CONTROLS_H).max(100.0));
         let (rect, resp) = ui.allocate_exact_size(canvas, Sense::click_and_drag());
-        // 比較（F13）: 左右に A・B を並べる。カメラ・選択・再生位置は共有し、状態（ノードの色）だけがスロットごとに違う
         let n = self.slots.len();
         let gap = 4.0;
         let w = (rect.width() - gap * (n as f32 - 1.0)) / n as f32;
@@ -159,31 +158,6 @@ impl App {
             self.paint_minimap(&painter, rect_i, &cam, size, max_dist);
             if i == 0 {
                 self.paint_overview_ui(ui, rect_i, &resp, &cam, size);
-            }
-            if n > 1 {
-                // 比較: A・B の札と、B で起きたエラー
-                let label = if i == 0 { "A" } else { "B" };
-                let r = Rect::from_min_size(
-                    Pos2::new(rect_i.max.x - 34.0, rect_i.min.y + 6.0),
-                    vec2(28.0, 20.0),
-                );
-                painter.rect_filled(r, 4.0, col(self.tokens.series_internal));
-                painter.text(
-                    r.center(),
-                    Align2::CENTER_CENTER,
-                    label,
-                    FontId::proportional(14.0),
-                    Color32::WHITE,
-                );
-                if let Some(e) = self.slots[i].error.clone() {
-                    painter.text(
-                        rect_i.center_top() + vec2(0.0, 30.0),
-                        Align2::CENTER_TOP,
-                        e,
-                        FontId::proportional(12.0),
-                        Color32::from_rgb(200, 60, 60),
-                    );
-                }
             }
         }
         self.cur = 0;
@@ -843,8 +817,8 @@ impl App {
                 }
                 ui.label(st.label.clone());
             }
-            // 推薦（A か B のどちらかで on のときだけ）: 推薦で受信 = 黄色の塗り（青い縁 = 内部活性）、推薦由来 = 暗い黄色の塗り
-            if self.rec_on(0) || (self.compare && self.rec_on(1)) {
+            // 推薦（on のときだけ）: 推薦で受信 = 黄色の塗り（青い縁 = 内部活性）、推薦由来 = 暗い黄色の塗り
+            if self.rec_on(0) {
                 let t = &self.tokens;
                 let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
                 ui.painter().circle_filled(r.center(), 6.0, col(t.rec));
@@ -854,9 +828,6 @@ impl App {
                 ui.painter()
                     .circle_stroke(r.center(), 5.5, Stroke::new(2.0, col(t.split[0])));
                 ui.label("推薦・内部活性");
-                let (r, _) = ui.allocate_exact_size(vec2(14.0, 14.0), Sense::hover());
-                ui.painter().circle_filled(r.center(), 4.5, col(t.rec_chain));
-                ui.label("推薦由来");
             }
         });
         ui.horizontal_wrapped(|ui| {
@@ -922,8 +893,24 @@ impl App {
             if before != self.view.int_mode {
                 self.slots[self.cur].display = None;
             }
+            // パネルの表示・非表示（隠した側へ図が広がる）。ツールバーは混むので、図のすぐ下に置く
+            ui.separator();
+            for (i, label, name) in [
+                (0, "◧ 設定", "左の設定パネル（[）"),
+                (1, "◨ ノード", "右のノード状態パネル（]）"),
+                (2, "⬓ グラフ", "下のグラフと選んだ系列（\\）"),
+            ] {
+                let shown = [self.show_left, self.show_right, self.show_bottom][i];
+                if ui
+                    .selectable_label(!shown, label)
+                    .on_hover_text(format!("{name}を{}", if shown { "隠す" } else { "出す" }))
+                    .clicked()
+                {
+                    self.toggle_panel(i);
+                }
+            }
             // 推薦で受信の色: 累積（一度でも推薦で受け取った人）か、このラウンドのみか
-            if self.rec_on(0) || (self.compare && self.rec_on(1)) {
+            if self.rec_on(0) {
                 ui.label("推薦:");
                 let before = self.view.rec_cumulative;
                 egui::ComboBox::from_id_salt("recmode")
