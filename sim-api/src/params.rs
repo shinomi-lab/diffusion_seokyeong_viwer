@@ -3,7 +3,7 @@
 
 use serde::Serialize;
 
-use crate::config::{MechanismConfig, RecMethod, RecommenderConfig};
+use crate::config::{MechanismConfig, RecommenderConfig};
 
 #[derive(Clone, Copy, Debug, Serialize, PartialEq)]
 #[serde(rename_all = "lowercase")]
@@ -82,61 +82,9 @@ pub fn get_value(c: &MechanismConfig, id: &str) -> Option<f64> {
     })
 }
 
-/// 推薦のスライダーの登録簿（`recommender-design.md` 5 章）。`mechanism` は画面の見出し。
+/// 推薦（Rモデル）のスライダーの登録簿（`recommender-v3-design.md` 5 章）。`mechanism` は画面の見出し。
 pub fn rec_param_specs() -> &'static [ParamSpec] {
     const SPECS: &[ParamSpec] = &[
-        f(
-            "rec.threshold",
-            "推薦",
-            "閾値 θ（これ以上のスコアの人に推薦）",
-            0.0,
-            1.0,
-            0.01,
-            0.15,
-            0.0,
-        ),
-        f(
-            "rec.w_share",
-            "推薦",
-            "シェアの重み（外部行動は 1 − この値）",
-            0.0,
-            1.0,
-            0.05,
-            0.5,
-            0.5,
-        ),
-        f(
-            "rec.prior_n0",
-            "推薦",
-            "平滑化の強さ λ（記録の少ない人を全体の率に寄せる）",
-            0.0,
-            100.0,
-            0.5,
-            2.0,
-            2.0,
-        ),
-        f(
-            "rec.alpha",
-            "推薦",
-            "CF の比率 α（1 で協調フィルタリングだけ、0 でグラフだけ）",
-            0.0,
-            1.0,
-            0.05,
-            0.5,
-            0.5,
-        ),
-        ParamSpec {
-            id: "rec.min_common",
-            mechanism: "推薦",
-            label: "似かたの最小人数 c（両方の種類を受け取った人がこれ未満なら似かた 0）",
-            kind: ParamKind::U32,
-            min: Some(1.0),
-            max: Some(1000.0),
-            step: Some(1.0),
-            default: 5.0,
-            off: 5.0,
-        },
-        // Rモデル（`recommender-v3-design.md` 5 章）
         f(
             "rec.eps",
             "推薦",
@@ -156,16 +104,6 @@ pub fn rec_param_specs() -> &'static [ParamSpec] {
             0.05,
             1.0,
             1.0,
-        ),
-        f(
-            "rec.near",
-            "推薦",
-            "近くへの推薦 θ（2 歩先へ配る確率）",
-            0.0,
-            1.0,
-            0.05,
-            0.5,
-            0.5,
         ),
         f(
             "rec.tau",
@@ -211,26 +149,11 @@ pub fn rec_param_specs() -> &'static [ParamSpec] {
     SPECS
 }
 
-/// 方式ごとに使う推薦の項目（画面の有効・無効。`recommender-v3-design.md` 5 章）。
-pub fn rec_param_used(method: RecMethod, id: &str) -> bool {
-    match id {
-        "rec.threshold" | "rec.w_share" | "rec.prior_n0" => method != RecMethod::Wave,
-        "rec.alpha" | "rec.min_common" => method == RecMethod::Hybrid,
-        _ => method == RecMethod::Wave,
-    }
-}
-
 /// 推薦の設定の現在値（範囲検査用）。
 pub fn get_rec_value(c: &RecommenderConfig, id: &str) -> Option<f64> {
     Some(match id {
-        "rec.threshold" => c.threshold,
-        "rec.w_share" => c.w_share,
-        "rec.prior_n0" => c.prior_n0,
-        "rec.alpha" => c.alpha,
-        "rec.min_common" => c.min_common as f64,
         "rec.eps" => c.eps,
         "rec.delta" => c.delta,
-        "rec.near" => c.near,
         "rec.tau" => c.tau,
         "rec.phi_max" => c.phi_max,
         "rec.k" => c.k,

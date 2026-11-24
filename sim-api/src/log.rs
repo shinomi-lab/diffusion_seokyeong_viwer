@@ -11,7 +11,7 @@ pub const F_EXT_NOW: u8 = 4;
 pub const F_EVER_RECV: u8 = 8;
 pub const F_EVER_INT: u8 = 16;
 pub const F_EVER_EXT: u8 = 32;
-/// このラウンドに推薦で受信した（`recommender-design.md` 6.5）。
+/// このラウンドに推薦で受信した（`recommender-v3-design.md` 6.4）。
 pub const F_REC_NOW: u8 = 64;
 /// 一度でも推薦で受け取った（累積）。推薦由来の連鎖の「このラウンド」はイベント列（`EV_RECCHAIN`）で分かる。
 pub const F_EVER_REC: u8 = 128;
@@ -223,6 +223,8 @@ pub struct RoundSummary {
     pub n_share: u32,
     pub new_xact: u32,
     pub cum_xact: u32,
+    /// 累積シェア数（このラウンドの終わり）。
+    pub cum_share: u32,
     pub n_waves: u32,
     /// このラウンドで内部が成立した受信者数。
     pub n_int_active_now: u32,
@@ -230,7 +232,7 @@ pub struct RoundSummary {
     pub recv: UtilityStats,
     /// IP 以外の全ノード。
     pub all: UtilityStats,
-    /// 推薦（`recommender-design.md` 6.4）。推薦 off では 0。
+    /// 推薦（`recommender-v3-design.md` 6.4）。推薦 off では 0。
     pub rec_received: u32,
     pub rec_share: u32,
     pub rec_xact: u32,

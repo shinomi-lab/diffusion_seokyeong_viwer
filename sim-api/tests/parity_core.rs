@@ -98,7 +98,6 @@ fn run_parity(mech_cfg: &MechanismConfig) -> (usize, usize) {
                         &mut pop,
                         &mut sc,
                         ip,
-                        id as u8,
                         &msgs[id],
                         &mech,
                         round as u32 + 1,
@@ -237,7 +236,6 @@ fn t02_sequential_trials_match_core() {
                 &mut pop,
                 &mut sc,
                 4,
-                id as u8,
                 &msgs[id],
                 &mech,
                 r as u32 + 1,
@@ -267,9 +265,6 @@ fn w0_pop(n: usize) -> Population {
         recv_round: vec![0; n],
         u0_int: -1.0,
         u0_ext: -1.0,
-        rec_hist: Vec::new(),
-        rec_total: Vec::new(),
-        rec_l: 0,
     }
 }
 
@@ -300,7 +295,6 @@ fn t12_m5_diamond_counts_arrivals() {
         &mut pop,
         &mut sc,
         0,
-        0,
         &m,
         &Mech::off(),
         1,
@@ -330,7 +324,6 @@ fn t12_m5_diamond_counts_arrivals() {
         1.0,
         &mut pop,
         &mut sc,
-        0,
         0,
         &m,
         &Mech::off(),
@@ -370,7 +363,7 @@ fn t12_n_max_cap_and_ignored_hits() {
     let mut rec = Rec::default();
     let mut rng = rng_from_seed(0);
     run_round(
-        &g.csr, 1.0, &mut pop, &mut sc, 0, 0, &m, &mech, 1, &mut rng, &mut rec,
+        &g.csr, 1.0, &mut pop, &mut sc, 0, &m, &mech, 1, &mut rng, &mut rec,
     );
     assert_eq!(rec.0.iter().find(|e| e.node == 5).unwrap().n_arr, 4);
     // M5（検討中）: assert!((pop.states[5].u_int - 0.2 * 1.5).abs() < 1e-12, "n_max=3 で頭打ち");
@@ -402,8 +395,7 @@ fn t16_event_invariants() {
             let id = (round as usize) % 6;
             let mut rec = Rec::default();
             let c = run_round(
-                &g.csr, 0.6, &mut pop, &mut sc, ip, id as u8, &msgs[id], &mech, round, &mut rng,
-                &mut rec,
+                &g.csr, 0.6, &mut pop, &mut sc, ip, &msgs[id], &mech, round, &mut rng, &mut rec,
             );
             assert_eq!(rec.0.len() as u32, c.n_received);
             let mut seen = std::collections::HashSet::new();

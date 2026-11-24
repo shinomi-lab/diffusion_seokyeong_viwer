@@ -189,6 +189,7 @@ fn round_summary_stats() {
     assert_eq!(sm.recv.n, sm.n_received);
     assert_eq!(sm.all.n, 299);
     assert_eq!(sm.cum_xact, sm.new_xact);
+    assert_eq!(sm.cum_share, sm.n_share);
     // 分位点は昇順の添字 round((n-1)q)
     assert_eq!(quantile_sorted(&[1.0, 2.0, 3.0, 4.0, 5.0], 0.5), 3.0);
     assert_eq!(quantile_sorted(&[1.0, 2.0], 0.9), 2.0);

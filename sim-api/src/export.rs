@@ -149,7 +149,7 @@ impl ScenarioRecord {
     }
 }
 
-pub const ROUND_CSV_HEADER: &str = "round,msg,new_share,new_xact,cum_xact,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all,rec_received,rec_share,rec_xact,chain_received,chain_xact,cum_rec";
+pub const ROUND_CSV_HEADER: &str = "round,msg,new_share,new_xact,cum_xact,cum_share,received,mean_u_int,mean_u_ext,p10_u_int,p50_u_int,p90_u_int,p10_u_ext,p50_u_ext,p90_u_ext,mean_u_int_all,mean_u_ext_all,rec_received,rec_share,rec_xact,chain_received,chain_xact,cum_rec";
 
 /// ラウンド別結果。`mean_*`・分位点は受信済みノード、`*_all` は IP 以外の全ノード。
 pub fn round_rows_csv(s: &Session) -> String {
@@ -159,12 +159,13 @@ pub fn round_rows_csv(s: &Session) -> String {
         let (a, b) = (&r.recv, &r.all);
         let _ = writeln!(
             out,
-            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
+            "{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{},{}",
             r.round,
             r.choice.to_char(),
             r.n_share,
             r.new_xact,
             r.cum_xact,
+            r.cum_share,
             r.n_received,
             a.mean_int,
             a.mean_ext,

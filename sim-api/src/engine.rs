@@ -7,14 +7,14 @@
 use rand::Rng;
 use sim_core::message::Message;
 
-use crate::config::{Mech, RecMethod, RecommenderConfig};
+use crate::config::{Mech, RecommenderConfig};
 use crate::csr::Csr;
 use crate::population::Population;
 use crate::rng::SimRng;
 
 const NONE: u32 = u32::MAX;
 
-/// 推薦で受信したときの `from`（`recommender-design.md` 6.3）。
+/// 推薦で受信したときの `from`（`recommender-v3-design.md` 6.2）。
 pub const FROM_REC: u32 = u32::MAX;
 
 /// 受信の経路。
@@ -35,9 +35,6 @@ pub struct Scratch {
     newly: Vec<(u32, u32)>,
     /// 受信ノードの経路（VIA_*）。推薦 on のラウンドでだけ使う。
     via: Vec<u8>,
-    /// 社会的証明の数: このラウンドの ① で、そのノードに送った人（IP を含む）の数（`recommender-v2-design.md` 6.2）。
-    /// 推薦 on・CF＋グラフのラウンドでだけ確保して使う。
-    social: Vec<u32>,
     /// Rモデル: そのウェーブのシェア者の控え（`curr` は pop で空になるため）と、その出次数の累積和。
     sharers: Vec<u32>,
     deg_cum: Vec<u32>,
@@ -96,7 +93,6 @@ impl Scratch {
             next: Vec::new(),
             newly: Vec::new(),
             via: vec![VIA_FOLLOW; n],
-            social: Vec::new(),
             sharers: Vec::new(),
             deg_cum: Vec::new(),
             wave_trace: Vec::new(),
@@ -158,22 +154,19 @@ pub fn run_round<O: Observer>(
     pop: &mut Population,
     sc: &mut Scratch,
     ip: u32,
-    msg_id: u8,
     msg: &Message,
     mech: &Mech,
     round: u32,
     rng: &mut SimRng,
     obs: &mut O,
 ) -> RoundCounts {
-    run_round_rec(
-        csr, p, pop, sc, ip, msg_id, msg, mech, None, None, round, rng, obs,
-    )
+    run_round_rec(csr, p, pop, sc, ip, msg, mech, None, None, round, rng, obs)
 }
 
-/// 推薦付きの 1 ラウンド（`recommender-design.md` 6.3）。
-/// ① フォロー経由の連鎖（今と同じ）→ ② 推薦の段階（スコア ≥ θ の未受信者）→ ③ 推薦から始まる連鎖。
-/// `rec = None` のときは ① だけで、今の処理と完全に同じ（INV-R1）。推薦は拡散の乱数を引かない（INV-R2・INV-W2）。
-/// 方式 wave（Rモデル）では ② ③ を行わず、① の各ウェーブのあとに推薦する。`wave_ctx` はそのときだけ使う。
+/// 推薦付きの 1 ラウンド（Rモデル。`recommender-v3-design.md` 6.2）。
+/// フォロー経由の連鎖の各ウェーブのあとに、反応率に応じた数だけフォロー外へ押し出す。
+/// `rec = None`、または ε δ = 0 のときは推薦の処理を行わず、今の処理と完全に同じ（INV-W1・W4）。
+/// 推薦は拡散の乱数を引かず、`wave_ctx` の推薦専用の乱数だけを引く（INV-W2）。
 #[allow(clippy::too_many_arguments)]
 pub fn run_round_rec<O: Observer>(
     csr: &Csr,
@@ -181,7 +174,6 @@ pub fn run_round_rec<O: Observer>(
     pop: &mut Population,
     sc: &mut Scratch,
     ip: u32,
-    msg_id: u8,
     msg: &Message,
     mech: &Mech,
     rec: Option<&RecommenderConfig>,
@@ -200,23 +192,14 @@ pub fn run_round_rec<O: Observer>(
     if rec.is_some() {
         sc.via.fill(VIA_FOLLOW);
     }
-    // 社会的証明を数えるのは CF＋グラフのときだけ（基準・off では v1 と同じ処理）
-    let count_social = rec.is_some_and(|r| r.method == RecMethod::Hybrid);
-    if count_social {
-        sc.social.clear();
-        sc.social.resize(csr.n_nodes(), 0);
-    }
     let mut c = RoundCounts::default();
     let mut wave = 0u32;
-    // Rモデル: ε δ = 0 なら推薦の分岐に入らず、rec_rng も引かない（INV-W4）
-    let is_wave = rec.is_some_and(|r| r.method == RecMethod::Wave);
+    // ε δ = 0 なら推薦の分岐に入らず、rec_rng も引かない（INV-W4）
     let mut wave_rec = match (rec, wave_ctx) {
-        (Some(cfg), Some(ctx)) if is_wave && cfg.eps * cfg.delta > 0.0 => {
-            Some((cfg, ctx, WaveAcc::default()))
-        }
+        (Some(cfg), Some(ctx)) if cfg.eps * cfg.delta > 0.0 => Some((cfg, ctx, WaveAcc::default())),
         _ => None,
     };
-    // ① フォロー経由の連鎖（Rモデルでは各ウェーブのあとに推薦する）
+    // フォロー経由の連鎖（各ウェーブのあとに推薦する）
     cascade(
         csr,
         p,
@@ -230,35 +213,11 @@ pub fn run_round_rec<O: Observer>(
         &mut wave,
         &mut c,
         rec.is_some(),
-        count_social,
         wave_rec.as_mut(),
     );
     if let Some((cfg, ctx, acc)) = &wave_rec {
         c.rec_miss = acc.miss;
         c.e_hat_end = (acc.cum_h as f64 + cfg.k * ctx.a_t) / (acc.cum_c as f64 + cfg.k);
-    }
-    if let Some(cfg) = rec.filter(|_| !is_wave) {
-        // ② 推薦の段階: 前のラウンドまでの履歴と、① の社会的証明だけで選ぶ（INV-R5・INV-V5）。乱数は引かない
-        let g = count_social.then_some((csr, sc.social.as_slice()));
-        let picked = crate::recommend::select(pop, &sc.rcvd, ip, msg_id, cfg, g);
-        if !picked.is_empty() {
-            sc.newly.clear();
-            for &j in &picked {
-                let ju = j as usize;
-                sc.rcvd[ju] = true;
-                sc.recv_wave[ju] = wave;
-                sc.arr[ju] = 1;
-                sc.via[ju] = VIA_REC;
-                sc.newly.push((j, FROM_REC));
-            }
-            apply_wave(csr, pop, sc, msg, mech, round, obs, wave, &mut c, true);
-            std::mem::swap(&mut sc.curr, &mut sc.next);
-            wave += 1;
-            // ③ 推薦から始まる連鎖（社会的証明は数えない。INV-V5）
-            cascade(
-                csr, p, pop, sc, msg, mech, round, rng, obs, &mut wave, &mut c, true, false, None,
-            );
-        }
     }
     c.n_waves = wave;
     c
@@ -279,7 +238,6 @@ fn cascade<O: Observer>(
     wave: &mut u32,
     c: &mut RoundCounts,
     track_via: bool,
-    count_social: bool,
     mut wave_rec: Option<&mut (&RecommenderConfig, WaveCtx, WaveAcc)>,
 ) {
     while !sc.curr.is_empty() {
@@ -291,11 +249,6 @@ fn cascade<O: Observer>(
         while let Some(i) = sc.curr.pop() {
             // INV-05: 後入れ先出し、後続は昇順
             for &j in csr.succ(i) {
-                if count_social {
-                    // i（IP か、① でシェアした人）は j のフォロー先。抽選の結果によらず数える
-                    // 仮定: 社会的証明の送り手に IP を含める（U-V1）
-                    sc.social[j as usize] += 1;
-                }
                 // INV-04: 受信済みの隣人に対しても必ず 1 回引く（短絡しない）
                 let hit = p > rng.random::<f64>();
                 if hit {
@@ -366,15 +319,11 @@ fn recommend_wave<O: Observer>(
     }
     let budget = cfg.eps * cfg.delta * crate::recommend::phi(cfg, x) * p * total as f64;
     let slots = budget.floor() as u32 + (ctx.rng.random::<f64>() < budget.fract()) as u32;
-    let n = csr.n_nodes() as u32;
     let miss_before = acc.miss;
     sc.newly.clear();
     for _ in 0..slots {
-        let target = if ctx.rng.random::<f64>() < cfg.near {
-            crate::recommend::two_step_walk(csr, &sc.sharers, &sc.deg_cum, ctx.rng)
-        } else {
-            Some(ctx.rng.random_range(0..n))
-        };
+        // 宛先はシェア者のフォロワーのフォロワー（2 歩のランダムウォーク）だけ。行き止まりなら None
+        let target = crate::recommend::two_step_walk(csr, &sc.sharers, &sc.deg_cum, ctx.rng);
         // IP は最初から受信済みなので、ここで自動的に除かれる（INV-13）
         match target.filter(|&j| !sc.rcvd[j as usize]) {
             Some(j) => {

@@ -6,7 +6,7 @@
 //! 実行: cargo run --release --example wave_crosscheck -p sim-api -- グラフ.txt 出力.csv [試行数]
 use std::fmt::Write;
 
-use sim_api::config::{RecMethod, ScenarioConfig};
+use sim_api::config::ScenarioConfig;
 use sim_api::engine::{NoTrace, Scratch, WaveCtx, run_round_rec};
 use sim_api::graph_io::*;
 use sim_api::recommend::rec_rng;
@@ -33,7 +33,6 @@ fn main() {
         ..Default::default()
     };
     cfg.recommender.enabled = true;
-    cfg.recommender.method = RecMethod::Wave;
     let scn = Scenario::new(g, cfg).unwrap();
     let csr = &scn.graph.csr;
     // IP は出次数が最大のノード
@@ -67,7 +66,6 @@ fn main() {
             &mut pop,
             &mut sc,
             ip,
-            m,
             &msg,
             &scn.mech,
             Some(r),
@@ -90,10 +88,9 @@ fn main() {
     }
     let n = trials as f64;
     println!(
-        "# graph={path} ip={ip} p={} eps={} near={} k={} phi_max={} ebar0={} mean_int={} s_int={} s_ext={} trials={trials}",
+        "# graph={path} ip={ip} p={} eps={} k={} phi_max={} ebar0={} mean_int={} s_int={} s_ext={} trials={trials}",
         scn.cfg.receipt_probability,
         r.eps,
-        r.near,
         r.k,
         r.phi_max,
         scn.ebar0,

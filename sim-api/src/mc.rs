@@ -3,7 +3,7 @@
 use rand::SeedableRng;
 use serde::Serialize;
 
-use crate::engine::{NoTrace, Scratch, run_round};
+use crate::engine::{NoTrace, Scratch, WaveCtx, run_round_rec};
 use crate::groups::Band;
 use crate::log::{Choice, quantile_sorted};
 use crate::node::EVER_RECV;
@@ -94,56 +94,34 @@ pub fn run_trial(
     out.clear();
     let mut pop = scn.initial.clone();
     let mech = scn.mech;
-    // Rモデル: 推薦専用の乱数は試行ごとに作る。拡散の乱数の複製から種を取るので、拡散の乱数は消費しない（INV-W2）。
+    // 推薦専用の乱数は試行ごとに作る。拡散の乱数の複製から種を取るので、拡散の乱数は消費しない（INV-W2）。
     let rc = &scn.cfg.recommender;
-    let is_wave = rc.enabled && rc.method == crate::config::RecMethod::Wave;
     let mut rec_rng = crate::recommend::rec_rng(rand::RngCore::next_u64(&mut rng.clone()));
     let mut rec_a = scn.ebar0;
     for (r, &c) in seq.iter().enumerate() {
         let round = r as u32 + 1;
         let Choice::Msg(id) = c;
-        let k = if scn.cfg.recommender.enabled {
-            // 推薦 on: セッションと同じく、ラウンドの終わりに履歴を更新する（INV-R5）
-            let mut col = crate::recommend::HistoryCollector::default();
-            let k = crate::engine::run_round_rec(
-                &scn.graph.csr,
-                scn.cfg.receipt_probability,
-                &mut pop,
-                scratch,
-                ip,
-                id,
-                &scn.messages[id as usize],
-                &mech,
-                Some(&scn.cfg.recommender),
-                is_wave.then_some(crate::engine::WaveCtx {
-                    rng: &mut rec_rng,
-                    a_t: rec_a,
-                    ebar0: scn.ebar0,
-                }),
-                round,
-                rng,
-                &mut col,
-            );
-            crate::recommend::update_history(&mut pop, id, col.0.into_iter());
-            if is_wave && rc.eps * rc.delta > 0.0 {
-                rec_a = rc.mu * rec_a + (1.0 - rc.mu) * k.e_hat_end;
-            }
-            k
-        } else {
-            run_round(
-                &scn.graph.csr,
-                scn.cfg.receipt_probability,
-                &mut pop,
-                scratch,
-                ip,
-                id,
-                &scn.messages[id as usize],
-                &mech,
-                round,
-                rng,
-                &mut NoTrace,
-            )
-        };
+        let k = run_round_rec(
+            &scn.graph.csr,
+            scn.cfg.receipt_probability,
+            &mut pop,
+            scratch,
+            ip,
+            &scn.messages[id as usize],
+            &mech,
+            rc.enabled.then_some(rc),
+            rc.enabled.then_some(WaveCtx {
+                rng: &mut rec_rng,
+                a_t: rec_a,
+                ebar0: scn.ebar0,
+            }),
+            round,
+            rng,
+            &mut NoTrace,
+        );
+        if rc.enabled && rc.eps * rc.delta > 0.0 {
+            rec_a = rc.mu * rec_a + (1.0 - rc.mu) * k.e_hat_end;
+        }
         let (xact, share) = (k.n_xact, k.n_share);
         let (mut si, mut se, mut n, mut cr) = (0.0f64, 0.0f64, 0u32, 0u32);
         for s in &pop.states {

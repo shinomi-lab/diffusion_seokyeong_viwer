@@ -215,57 +215,22 @@ impl MechanismConfig {
     }
 }
 
-/// 推薦（`recommender-design.md` 5 章）。拡張機構とは別の設定。既定は off（現行モデル）。
-/// 推薦の方式（`recommender-v2-design.md` 5 章）。
-#[derive(Clone, Copy, Debug, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "lowercase")]
-pub enum RecMethod {
-    /// 基準（v1）: 本人の同じ種類の反応率を全体の率に寄せる。
-    Baseline,
-    /// CF＋グラフ（v2）: アイテムベースの協調フィルタリングと社会的証明の重み付きの和。
-    Hybrid,
-    /// Rモデル（v3、`recommender-v3-design.md`）: 各ウェーブのあとに、反応率に応じた数だけフォロー外へ押し出す。
-    Wave,
-}
-
-impl RecMethod {
-    /// キーが無い古い記録（v1 で保存）は基準として読む。
-    // 仮定: 古い記録の再現性を優先し、キーが無いときと既定値（Hybrid）を分ける（D-V4）。
-    fn legacy() -> Self {
-        Self::Baseline
-    }
-}
-
-#[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
-#[serde(default)]
+/// 推薦（Rモデル。`recommender-v3-design.md` 5 章）。拡張機構とは別の設定。既定は off（現行モデル）。
+/// 2026-10-27 に、推薦の v1（基準）と v2（CF＋グラフ）は廃止した。
+#[derive(Clone, Debug, Serialize, PartialEq)]
 pub struct RecommenderConfig {
     pub enabled: bool,
-    #[serde(default = "RecMethod::legacy")]
-    pub method: RecMethod,
-    /// 閾値 θ。スコアがこれ以上の人に推薦する。
-    // 仮定: U-R1。既定 0.15 は仮置き（3 水準の比較で決める）。
-    pub threshold: f64,
-    /// シェアの重み w_s。外部行動の重みは 1 − w_s。
-    pub w_share: f64,
-    /// 平滑化の強さ（基準では n₀、CF＋グラフでは λ）。
-    pub prior_n0: f64,
-    /// CF の比率 α（1 で CF だけ、0 でグラフだけ）。
-    pub alpha: f64,
-    /// 種類どうしの似かたを計算する最小の共通受信者数 c。
-    pub min_common: u32,
-    /// Rモデル: 推薦の強さ ε（0 で推薦なし）。
+    /// 推薦の強さ ε（0 で推薦なし）。
     pub eps: f64,
-    /// Rモデル: フォロー外の露出の割引 δ（1 で割引なし）。
+    /// フォロー外の露出の割引 δ（1 で割引なし）。
     pub delta: f64,
-    /// Rモデル: 近くへの推薦 θ（2 歩先へ配る確率）。v1 の閾値 θ（`threshold`）とは別物。
-    pub near: f64,
-    /// Rモデル: しきい値 τ（反応率が基準の何倍で推薦するか）。
+    /// しきい値 τ（反応率が基準の何倍で推薦するか）。
     pub tau: f64,
-    /// Rモデル: 推薦量の倍率の上限 φ_max。
+    /// 推薦量の倍率の上限 φ_max。
     pub phi_max: f64,
-    /// Rモデル: 擬似カウント k（事前分布の強さ）。
+    /// 擬似カウント k（事前分布の強さ）。
     pub k: f64,
-    /// Rモデル: アカウント記憶の持続 μ（R3。1 で記憶なし）。
+    /// アカウント記憶の持続 μ（R3。1 で記憶なし）。
     pub mu: f64,
 }
 
@@ -273,21 +238,54 @@ impl Default for RecommenderConfig {
     fn default() -> Self {
         Self {
             enabled: false,
-            method: RecMethod::Hybrid,
-            threshold: 0.15,
-            w_share: 0.5,
-            prior_n0: 2.0,
-            alpha: 0.5,
-            min_common: 5,
             // 仮定: U-W1。Rモデルの既定値は仮置き（参照実装 diffusion_seokyeong と同じ）。
             eps: 1.0,
             delta: 1.0,
-            near: 0.5,
             tau: 0.0,
             phi_max: 3.0,
             k: 10.0,
             mu: 1.0,
         }
+    }
+}
+
+/// 読み込み用。廃止した方式（v1 基準・v2 CF＋グラフ）の記録を見分けるために `method` を受け取る。
+#[derive(Deserialize, Default)]
+#[serde(default)]
+struct RecommenderRaw {
+    enabled: bool,
+    method: Option<String>,
+    eps: Option<f64>,
+    delta: Option<f64>,
+    tau: Option<f64>,
+    phi_max: Option<f64>,
+    k: Option<f64>,
+    mu: Option<f64>,
+}
+
+impl<'de> Deserialize<'de> for RecommenderConfig {
+    /// 廃止した方式の記録は**推薦なし（off）として読む**（2026-10-27）。見分け方:
+    /// `method` が "wave" 以外（"baseline"・"hybrid"）、または `method` も `eps` も無い（v1 で保存した記録）。
+    /// 現在の形式（`method` なし・`eps` あり）と、v3 で保存した記録（`method` = "wave"）はそのまま読む。
+    /// 古い記録にあった `threshold`・`w_share` などのキーは無視する。
+    fn deserialize<D: serde::Deserializer<'de>>(de: D) -> Result<Self, D::Error> {
+        let raw = RecommenderRaw::deserialize(de)?;
+        let d = Self::default();
+        let legacy = raw.enabled
+            && match raw.method.as_deref() {
+                Some("wave") => false,
+                Some(_) => true,
+                None => raw.eps.is_none(),
+            };
+        Ok(Self {
+            enabled: raw.enabled && !legacy,
+            eps: raw.eps.unwrap_or(d.eps),
+            delta: raw.delta.unwrap_or(d.delta),
+            tau: raw.tau.unwrap_or(d.tau),
+            phi_max: raw.phi_max.unwrap_or(d.phi_max),
+            k: raw.k.unwrap_or(d.k),
+            mu: raw.mu.unwrap_or(d.mu),
+        })
     }
 }
 

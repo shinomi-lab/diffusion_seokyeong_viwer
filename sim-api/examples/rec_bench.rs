@@ -1,4 +1,4 @@
-//! T-R11・T-V10・T-W10: 推薦の時間を測る（`recommender-design.md` 11 章、v3 は方式 wave も）。
+//! T-W10: 推薦（Rモデル）の時間を測る（`recommender-v3-design.md` 10 章）。
 //! 実行: cargo run --release --example rec_bench -p sim-api -- グラフ.txt [ラウンド数]
 use std::sync::Arc;
 use std::time::Instant;
@@ -20,22 +20,11 @@ fn main() {
         directed: true,
         transposed: true,
     };
-    use sim_api::config::RecMethod;
-    for (name, rec, method) in [
-        ("推薦 off", false, RecMethod::Baseline),
-        ("推薦 on・基準（θ=0.15）", true, RecMethod::Baseline),
-        (
-            "推薦 on・CF＋グラフ（θ=0.15, α=0.5）",
-            true,
-            RecMethod::Hybrid,
-        ),
-        ("推薦 on・Rモデル（ε=1）", true, RecMethod::Wave),
-    ] {
+    for (name, rec) in [("推薦 off", false), ("推薦 on・Rモデル（ε=1）", true)] {
         let g = load_graph(&src).unwrap();
         let n = g.n_nodes;
         let mut cfg = ScenarioConfig::default();
         cfg.recommender.enabled = rec;
-        cfg.recommender.method = method;
         let scn = Arc::new(Scenario::new(g, cfg).unwrap());
         let mut s = Session::new(scn, 0).unwrap();
         let t = Instant::now();

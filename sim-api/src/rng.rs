@@ -11,6 +11,16 @@ pub fn rng_from_seed(seed: u64) -> SimRng {
     SimRng::seed_from_u64(seed)
 }
 
+/// ランダムな IP を 1 つ選ぶ（全ノードから一様）。拡散の乱数とは別の乱数で、`n_nodes` が 0 のときは `None`。
+/// `u64` で引くので 32bit（WASM）と 64bit で同じ結果になる。
+pub fn pick_ip(n_nodes: usize, seed: u64) -> Option<u32> {
+    use rand::Rng;
+    if n_nodes == 0 {
+        return None;
+    }
+    Some(rng_from_seed(seed).random_range(0..n_nodes as u64) as u32)
+}
+
 #[cfg(all(test, target_pointer_width = "64"))]
 mod tests {
     use super::*;
@@ -60,5 +70,27 @@ mod tests {
         let va: Vec<u64> = d.sample_iter(&mut a).take(1000).map(f64::to_bits).collect();
         let vb: Vec<u64> = d.sample_iter(&mut b).take(1000).map(f64::to_bits).collect();
         assert_eq!(va, vb);
+    }
+}
+
+#[cfg(test)]
+mod pick_ip_tests {
+    use super::*;
+
+    #[test]
+    fn same_seed_same_ip_in_range() {
+        for s in 0..200u64 {
+            let a = pick_ip(100, s).unwrap();
+            assert_eq!(a, pick_ip(100, s).unwrap());
+            assert!(a < 100);
+        }
+        assert_eq!(pick_ip(0, 1), None);
+    }
+
+    #[test]
+    fn seeds_spread() {
+        let set: std::collections::HashSet<u32> =
+            (0..200u64).map(|s| pick_ip(100, s).unwrap()).collect();
+        assert!(set.len() > 40);
     }
 }
