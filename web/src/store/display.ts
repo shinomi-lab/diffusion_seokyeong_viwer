@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { emptyEvents, stateAtWave } from '../logic/frames';
 import type { EventCols } from '../worker/protocol';
 import { usePlayback } from './playback';
-import { useSession, useSessionB } from './session';
+import { useSession } from './session';
 import { useView } from './view';
 
 export interface Display {
@@ -15,9 +15,8 @@ export interface Display {
   k: number;
 }
 
-/** `slot`: 比較（F13）の A = 0 / B = 1。再生位置は共有し、各スロットは自分の最後のウェーブで止まる。 */
-export function useDisplay(slot: 0 | 1 = 0): Display | null {
-  const store = slot === 1 ? useSessionB : useSession;
+export function useDisplay(): Display | null {
+  const store = useSession;
   const rounds = store((s) => s.rounds);
   const ip = store((s) => s.ip);
   const positions = store((s) => s.positions);

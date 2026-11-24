@@ -1,8 +1,7 @@
 // ラウンド別の時系列（F08）。新規シェア数・新規外部行動者数・累積外部行動者数、効用の平均と分位点。
-// MC の併記（F12: 平均と 10〜90% の帯）と、比較モード（F13）の B（破線）を同じ軸に重ねる。
+// MC の併記（F12: 平均と 10〜90% の帯）を同じ軸に重ねる。
 import { useMemo } from 'react';
-import { useCompare } from '../store/actions';
-import { recOn, useSession, useSessionB } from '../store/session';
+import { recOn, useSession } from '../store/session';
 import { T } from '../tokens';
 import { UPlotChart, type PlotSeries } from './Plot';
 
@@ -21,8 +20,6 @@ function push(c: Cols, s: PlotSeries, v: number[]): number {
 export function RoundChart() {
   const A = useSession((s) => s.rounds);
   const mc = useSession((s) => s.mc.result);
-  const compare = useCompare((c) => c.enabled);
-  const B = useSessionB((s) => s.rounds);
   const rec = useSession(recOn);
 
   const counts = useMemo(() => {
@@ -30,18 +27,11 @@ export function RoundChart() {
     push(c, { label: '新規シェア', color: T.series.newShare }, A.map((r) => r.summary.n_share));
     push(c, { label: '新規外部行動', color: T.series.newXact }, A.map((r) => r.summary.new_xact));
     push(c, { label: '累積外部行動', color: T.series.cumXact }, A.map((r) => r.summary.cum_xact));
+    push(c, { label: '累積シェア', color: T.series.cumShare }, A.map((r) => r.summary.cum_share));
     if (rec) {
-      // 推薦（recommender-design.md 8.4）。推薦 off では出さない
-      push(c, { label: '推薦経由の外部行動', color: T.series.recXact }, A.map((r) => r.summary.rec_xact + r.summary.chain_xact));
-      push(c, { label: '推薦で受信してシェア', color: T.series.recShare, dash: [2, 3] }, A.map((r) => r.summary.rec_share));
+      // 推薦（Rモデル。recommender-v3-design.md 8 章）。推薦 off では出さない。系列は「推薦で受信」の 2 つだけにしている（2026-10-27）
       push(c, { label: '推薦で受信', color: T.series.recXact, dash: [8, 5] }, A.map((r) => r.summary.rec_received));
       push(c, { label: '推薦で受信（累積人数）', color: T.series.recXact, dash: [14, 4, 3, 4] }, A.map((r) => r.summary.cum_rec));
-    }
-    if (compare) {
-      const pad = (f: (r: (typeof B)[number]) => number) => A.map((_, i) => (B[i] ? f(B[i]) : NaN));
-      push(c, { label: 'B 新規シェア', color: T.series.newShare, dash: [6, 4] }, pad((r) => r.summary.n_share));
-      push(c, { label: 'B 新規外部行動', color: T.series.newXact, dash: [6, 4] }, pad((r) => r.summary.new_xact));
-      push(c, { label: 'B 累積外部行動', color: T.series.cumXact, dash: [6, 4] }, pad((r) => r.summary.cum_xact));
     }
     if (mc && mc.rounds === A.length) {
       const m = push(c, { label: 'MC 累積外部行動（平均）', color: T.series.both }, mc.cum_xact.mean);
@@ -58,7 +48,7 @@ export function RoundChart() {
       }
     }
     return c;
-  }, [A, B, compare, mc, rec]);
+  }, [A, mc, rec]);
 
   const util = useMemo(() => {
     const c = empty(A.map((r) => r.summary.round));
@@ -70,17 +60,13 @@ export function RoundChart() {
     };
     add('内部', T.series.internal, (r) => [r.summary.recv.mean_int, r.summary.recv.q_int[0], r.summary.recv.q_int[2]], A);
     add('外部', T.series.external, (r) => [r.summary.recv.mean_ext, r.summary.recv.q_ext[0], r.summary.recv.q_ext[2]], A);
-    if (compare && B.length === A.length) {
-      push(c, { label: 'B 内部 平均', color: T.series.internal, dash: [6, 4] }, B.map((r) => r.summary.recv.mean_int));
-      push(c, { label: 'B 外部 平均', color: T.series.external, dash: [6, 4] }, B.map((r) => r.summary.recv.mean_ext));
-    }
     return c;
-  }, [A, B, compare]);
+  }, [A]);
 
   return (
     <section className="round-chart" aria-label="ラウンド別時系列">
       <div className="chart-col">
-        <h3>ラウンド別の人数{compare && '（破線 = B）'}</h3>
+        <h3>ラウンド別の人数</h3>
         <UPlotChart data={[counts.x, ...counts.cols]} xLabel="ラウンド" series={counts.series} bands={counts.bands} exportName="round-counts" title="ラウンド別の人数" />
       </div>
       <div className="chart-col">

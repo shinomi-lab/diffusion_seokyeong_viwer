@@ -5,11 +5,10 @@ import { msgName } from '../logic/units';
 import { usePlayback } from '../store/playback';
 import { applyAll, chooseIpAll, loadGraphAll, restartAll, stepAll } from '../store/actions';
 import { isDirty, useSession } from '../store/session';
+import { sim } from '../worker/client';
 import { MechanismEditor } from './MechanismEditor';
 import { RecommenderEditor } from './RecommenderEditor';
-import { RecSimTable } from './RecSimTable';
 import { RecWaveTable } from './RecWaveTable';
-import { ComparePanel } from './ComparePanel';
 
 let lastGraph: { bytes: Uint8Array; name: string } | null = null;
 
@@ -117,11 +116,9 @@ export function ControlPanel() {
       <details open>
         <summary>推薦</summary>
         <RecommenderEditor store={useSession} />
-        <RecSimTable />
         <RecWaveTable />
       </details>
 
-      <ComparePanel />
 
       <div className="apply">
         {confirming ? (
@@ -157,6 +154,8 @@ function IpPicker() {
   const ip = useSession((s) => s.ip);
   const scenario = useSession((s) => s.scenario);
   const [manual, setManual] = useState('');
+  const [seed, setSeed] = useState('');
+  const [lastSeed, setLastSeed] = useState<number | null>(null);
   const labels = useSession((s) => s.graph);
   const [metric, setMetric] = useState<'degree' | 'pagerank' | 'vc'>('degree');
   useEffect(() => {
@@ -166,6 +165,17 @@ function IpPicker() {
   void labels;
   const pick = async (n: number) => {
     await chooseIpAll(n);
+  };
+  // ランダムに選ぶ（全ノードから一様）。seed が空なら時刻から作り、使った seed を表示する（同じ seed なら同じノード）
+  const pickRandom = async () => {
+    const sd = seed === '' ? Date.now() % 2 ** 32 : Number(seed) >>> 0;
+    try {
+      const n = await sim.call('pickIp', { seed: sd });
+      setLastSeed(sd);
+      await pick(n);
+    } catch (e) {
+      useSession.setState({ error: e instanceof Error ? e.message : String(e) });
+    }
   };
   return (
     <div>
@@ -191,6 +201,11 @@ function IpPicker() {
         <input type="number" min={0} value={manual} placeholder="0〜" onChange={(e) => setManual(e.target.value)} />
         <button disabled={manual === ''} onClick={() => void pick(Number(manual))}>選ぶ</button>
       </label>
+      <label className="row"><span>ランダム</span>
+        <input type="number" min={0} value={seed} placeholder="seed（空なら自動）" onChange={(e) => setSeed(e.target.value)} />
+        <button onClick={() => void pickRandom()} data-testid="pick-random-ip">ランダムに選ぶ</button>
+      </label>
+      {lastSeed !== null && <p className="note">ランダム選択の seed: {lastSeed}（同じ seed なら同じノード）</p>}
       <p className="note">{ip === null ? 'IP が未選択です。順位表か、ノード詳細の「IP にする」から選べます。' : `現在の IP: ノード ${ip}`}</p>
     </div>
   );

@@ -24,11 +24,11 @@ const handlers: Handlers = {
   loadGraph: (s, a) => s.loadGraph(a.bytes, JSON.stringify(a.opts)),
   paramSpecs: (s) => s.paramSpecs(),
   recParamSpecs: (s) => s.recParamSpecs(),
-  recSim: (s) => s.recSim(),
   recWaveTrace: (s) => s.recWaveTrace(),
   createScenario: (s, a) => s.createScenario(a.configJson),
   centralityRanking: (s, a) => s.centralityRanking(a.metric, a.top, a.vcCsv),
   setIp: (s, a) => s.setIp(a.node),
+  pickIp: (s, a) => s.pickIp(a.seed),
   ringLayout: (s) => ({ angle: s.ringAngles(), dist: s.ringDist() }),
   step: (s, a): StepResult => {
     const summaryJson = s.step(a.choice);
@@ -83,17 +83,16 @@ function collectBuffers(v: unknown, out: Transferable[] = []): Transferable[] {
 }
 
 const ready = init();
-/** 比較（F13）の A・B で別々の Simulator を持つ。 */
-const sims: Simulator[] = [];
-const simFor = async (slot: number): Promise<Simulator> => {
+let simulator: Simulator | undefined;
+const simFor = async (): Promise<Simulator> => {
   await ready;
-  return (sims[slot] ??= new Simulator());
+  return (simulator ??= new Simulator());
 };
 
 self.onmessage = async (ev: MessageEvent<Req>) => {
-  const { id, op, args, slot = 0 } = ev.data;
+  const { id, op, args } = ev.data;
   try {
-    const sim = await simFor(slot);
+    const sim = await simFor();
     const h = handlers[op] as (s: Simulator, a: unknown) => unknown;
     const res = h(sim, args);
     post({ id, ok: true, res }, collectBuffers(res));

@@ -32,11 +32,11 @@ export interface Ops {
   loadGraph: { args: { bytes: Uint8Array; opts: GraphOpts }; res: string };
   paramSpecs: { args: Record<string, never>; res: string };
   recParamSpecs: { args: Record<string, never>; res: string };
-  recSim: { args: Record<string, never>; res: Float64Array };
   recWaveTrace: { args: Record<string, never>; res: string };
   createScenario: { args: { configJson: string }; res: string };
   centralityRanking: { args: { metric: 'degree' | 'pagerank' | 'vc'; top: number; vcCsv?: string }; res: Uint32Array };
   setIp: { args: { node: number }; res: string };
+  pickIp: { args: { seed: number }; res: number };
   ringLayout: { args: Record<string, never>; res: { angle: Float32Array; dist: Uint32Array } };
   step: { args: { choice: number }; res: StepResult };
   kinds: { args: { intMode: 0 | 1 }; res: Uint8Array };
@@ -69,8 +69,7 @@ export interface RoundDataRes {
 
 export type OpName = keyof Ops;
 
-/** `slot`: 比較（F13）の A = 0 / B = 1。それぞれ別の Simulator を持つ。 */
-export type Req = { [K in OpName]: { id: number; slot?: number; op: K; args: Ops[K]['args'] } }[OpName];
+export type Req = { [K in OpName]: { id: number; op: K; args: Ops[K]['args'] } }[OpName];
 export type Res = { id: number; ok: true; res: unknown } | { id: number; ok: false; error: string };
 
 // ---- 画面側で使う型（JSON の形） ----
@@ -92,6 +91,7 @@ export interface RoundSummary {
   n_share: number;
   new_xact: number;
   cum_xact: number;
+  cum_share: number;
   n_waves: number;
   n_int_active_now: number;
   recv: UtilityStats;
@@ -152,19 +152,6 @@ export interface RecvInfo {
   via: number;
 }
 
-/** 推薦のスコアの表の 1 行（種類 m）。 */
-export interface RecRowJson {
-  m: number;
-  received: number;
-  ps: number;
-  px: number;
-  /** 協調フィルタリング（基準ではスコアそのもの）。 */
-  f_cf: number;
-  /** 社会的証明（直近のラウンド。基準では 0）。 */
-  f_g: number;
-  f: number;
-}
-
 export interface NodeDetailJson {
   node: number;
   label: number;
@@ -174,8 +161,6 @@ export interface NodeDetailJson {
   int_rounds: number[];
   ext_round: number | null;
   is_ip: boolean;
-  /** 推薦 on のときだけ要素がある。 */
-  rec: RecRowJson[];
 }
 
 export interface Band {

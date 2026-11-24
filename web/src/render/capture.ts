@@ -1,5 +1,5 @@
 // 画像・動画の書き出し（F15）。ネットワーク図は 3 層（背景・WebGL・重ね描き）のキャンバスを 1 枚に合成して使う。
-// 比較モードでは A・B を左右に並べて 1 枚にする。外部サーバには何も送らない（N06）。
+// 外部サーバには何も送らない（N06）。
 import { usePlayback } from '../store/playback';
 
 export interface Layers {
@@ -8,21 +8,21 @@ export interface Layers {
   over: HTMLCanvasElement | null;
 }
 
-const registry = new Map<number, Layers>();
+let current: Layers | null = null;
 
-export function registerLayers(slot: number, layers: Layers): () => void {
-  registry.set(slot, layers);
+export function registerLayers(layers: Layers): () => void {
+  current = layers;
   return () => {
-    if (registry.get(slot) === layers) registry.delete(slot);
+    if (current === layers) current = null;
   };
 }
 
-/** 登録されているキャンバスを、左から（A, B の順に）1 枚に合成する。描いたら true。 */
+/** 登録されているキャンバスを 1 枚に合成する。描いたら true。 */
 export function compositeInto(dst: HTMLCanvasElement, bg: string): boolean {
-  const slots = [...registry.entries()].sort((a, b) => a[0] - b[0]).map(([, l]) => l).filter((l) => l.base && l.gl && l.over);
-  if (slots.length === 0) return false;
-  const w = slots.reduce((sum, l) => sum + l.base!.width, 0);
-  const h = Math.max(...slots.map((l) => l.base!.height));
+  const l = current;
+  if (!l || !l.base || !l.gl || !l.over) return false;
+  const w = l.base.width;
+  const h = l.base.height;
   if (dst.width !== w || dst.height !== h) {
     dst.width = w;
     dst.height = h;
@@ -31,11 +31,7 @@ export function compositeInto(dst: HTMLCanvasElement, bg: string): boolean {
   if (!ctx) return false;
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, w, h);
-  let x = 0;
-  for (const l of slots) {
-    for (const c of [l.base!, l.gl!, l.over!]) ctx.drawImage(c, x, 0);
-    x += l.base!.width;
-  }
+  for (const c of [l.base, l.gl, l.over]) ctx.drawImage(c, 0, 0);
   return true;
 }
 

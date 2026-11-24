@@ -2,6 +2,8 @@
 import { create } from 'zustand';
 
 export type DetailTab = 'node' | 'group';
+/** 隠せるパネル: 左（設定）・右（ノード状態）・下（グラフと選んだ系列）。 */
+export type PanelName = 'left' | 'right' | 'bottom';
 
 export interface Camera {
   cx: number;
@@ -30,6 +32,8 @@ interface ViewState {
   /** 描画する辺が上限で打ち切られたか。 */
   edgesTruncated: boolean;
   notice: string | null;
+  /** パネルを隠しているか。隠した側へネットワーク図が広がる（CSS の変数で列・行を 0 にする）。 */
+  hidden: Record<PanelName, boolean>;
 
   setMode(mode: 'overview' | 'expanded'): void;
   expand(nodes: Uint32Array, label: string): void;
@@ -43,6 +47,7 @@ interface ViewState {
   setEdgesTruncated(v: boolean): void;
   setNotice(s: string | null): void;
   resetView(mode: 'overview' | 'expanded'): void;
+  togglePanel(name: PanelName): void;
 }
 
 export const useView = create<ViewState>((set) => ({
@@ -58,6 +63,7 @@ export const useView = create<ViewState>((set) => ({
   camera: { cx: 0, cy: 0, zoom: 30 },
   edgesTruncated: false,
   notice: null,
+  hidden: { left: false, right: false, bottom: false },
 
   setMode: (mode) => set({ mode }),
   // 展開したリング・扇形は、そのまま「選択した群」としても使える（F19）
@@ -71,6 +77,7 @@ export const useView = create<ViewState>((set) => ({
   setCamera: (camera) => set({ camera }),
   setEdgesTruncated: (edgesTruncated) => set({ edgesTruncated }),
   setNotice: (notice) => set({ notice }),
+  togglePanel: (name) => set((s) => ({ hidden: { ...s.hidden, [name]: !s.hidden[name] } })),
   resetView: (mode) =>
     set({ mode, expanded: null, expandedLabel: '', fromOverview: false, selectedNode: null, groupNodes: null, notice: null }),
 }));

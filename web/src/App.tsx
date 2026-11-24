@@ -5,11 +5,11 @@ import { RoundChart } from './panels/RoundChart';
 import { Toolbar } from './panels/Toolbar';
 import { NetworkView, PlayControls } from './render/NetworkView';
 import { SeriesPanel } from './panels/SeriesPanel';
-import { useCompare } from './store/actions';
 import { usePlayback } from './store/playback';
 import { useSession } from './store/session';
+import { useView } from './store/view';
 
-/** キーボード: 1〜6 でメッセージ選択、Enter で発信、Space で再生／一時停止、←→ で 1 ウェーブ戻る／進む（11.3）。 */
+/** キーボード: 1〜6 でメッセージ選択、Enter で発信、Space で再生／一時停止、←→ で 1 ウェーブ戻る／進む（11.3）、[ ] \ で左・右・下のパネルを隠す／出す。 */
 function useKeyboard() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -28,6 +28,8 @@ function useKeyboard() {
       } else if (e.key === ' ') {
         e.preventDefault();
         pb.toggle();
+      } else if (e.key === '[' || e.key === ']' || e.key === '\\') {
+        useView.getState().togglePanel(e.key === '[' ? 'left' : e.key === ']' ? 'right' : 'bottom');
       } else if (e.key === 'ArrowLeft') {
         pb.stepWave(-1);
       } else if (e.key === 'ArrowRight') {
@@ -42,7 +44,7 @@ function useKeyboard() {
 export default function App() {
   const init = useSession((s) => s.init);
   const ready = useSession((s) => s.ready);
-  const compare = useCompare((c) => c.enabled);
+  const hidden = useView((s) => s.hidden);
   useKeyboard();
   useEffect(() => {
     void init();
@@ -57,19 +59,12 @@ export default function App() {
     }
   }, [init]);
   return (
-    <div className="app">
+    <div className="app" data-hide-left={hidden.left || undefined} data-hide-right={hidden.right || undefined} data-hide-bottom={hidden.bottom || undefined}>
       <Toolbar />
       {ready ? <ControlPanel /> : <aside className="control"><p className="hint">WASM を読み込み中…</p></aside>}
       <section className="network" aria-label="ネットワーク表示">
         <div className="views">
-          {compare ? (
-            <>
-              <NetworkView slot={0} label="A" />
-              <NetworkView slot={1} label="B" />
-            </>
-          ) : (
-            <NetworkView slot={0} />
-          )}
+          <NetworkView />
         </div>
         <PlayControls />
       </section>

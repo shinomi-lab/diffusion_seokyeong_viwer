@@ -1,6 +1,6 @@
 // Rモデルの推薦の推移（直近のラウンドのウェーブごと。recommender-v3-design.md 8 章）。方式 wave のときだけ。
 import { useEffect, useState } from 'react';
-import { recWave, useSession } from '../store/session';
+import { recOn, useSession } from '../store/session';
 import { sim } from '../worker/client';
 
 interface WaveRow {
@@ -17,7 +17,7 @@ interface WaveTrace {
 }
 
 export function RecWaveTable() {
-  const on = useSession(recWave);
+  const on = useSession(recOn);
   const rounds = useSession((s) => s.rounds);
   const ip = useSession((s) => s.ip);
   const [v, setV] = useState<WaveTrace | null>(null);

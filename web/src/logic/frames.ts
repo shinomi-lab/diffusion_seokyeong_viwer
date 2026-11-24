@@ -1,6 +1,6 @@
 // 再生（F06）。ラウンド開始時の everFlags と、そのラウンドのイベント列から、ウェーブ k の終了時点の状態を作る（9.5）。
 import type { EventCols } from '../worker/protocol';
-import { EV_EXT, EV_INT, EV_REC, EV_RECCHAIN, EVER_EXT, EVER_INT, EVER_REC, EVER_RECV, kindOf } from './kinds';
+import { EV_EXT, EV_INT, EV_REC, EVER_EXT, EVER_INT, EVER_REC, EVER_RECV, kindOf } from './kinds';
 
 export interface WaveState {
   kinds: Uint8Array;
@@ -34,8 +34,8 @@ export function stateAtWave(everBefore: Uint8Array, ev: EventCols, k: number, in
     }
     if (ev.flags[i] & EV_EXT) ever[node] |= EVER_EXT;
     if (w === k) pulse[node] = 1;
+    // 推薦由来の連鎖（EV_RECCHAIN）は図に出さない（2026-10-28）。イベント列と CSV には残る
     if (ev.flags[i] & EV_REC) via[node] = 1;
-    else if (ev.flags[i] & EV_RECCHAIN && via[node] === 0) via[node] = 2;
   }
   const kinds = new Uint8Array(n);
   for (let j = 0; j < n; j++) kinds[j] = kindOf(ever[j], intNow[j] === 1, j === ip, intMode);

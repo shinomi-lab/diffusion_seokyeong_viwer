@@ -1,4 +1,4 @@
-// P3 の動作確認（実ブラウザ）: 巻き戻し・分岐・元の枝への復帰（F09）、MC の併記（F12）、2 画面比較（F13）。
+// P3 の動作確認（実ブラウザ）: 巻き戻し・分岐・元の枝への復帰（F09）、MC の併記（F12）。
 //   実行: npm run e2e:p3   （Chrome が必要。既定は macOS の Google Chrome。CHROME_PATH で変更可）
 import { spawn } from 'node:child_process';
 import puppeteer from 'puppeteer-core';
@@ -76,27 +76,12 @@ try {
   check(/200 試行/.test(mcText) && /帯に入っているラウンド/.test(mcText), `MC の結果と、実現が帯に入るラウンド数が表示される: ${mcText.slice(0, 60)}…`);
   await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/p3_tree_mc.png` : '/dev/null' });
 
-  // ---- F13: 2 画面比較 ----
-  await ev(() => document.querySelector('details summary')); // 何もしない（DOM 準備）
-  const compareBox = await page.evaluateHandle(() => [...document.querySelectorAll('label.check')].find((l) => l.textContent.includes('比較モード')));
-  await compareBox.asElement().click();
-  for (let i = 0; i < 100; i++) { if (await ev(() => window.__stores.useSessionB.getState().rounds.length === 5)) break; await sleep(100); }
-  check(await ev(() => window.__stores.useSessionB.getState().rounds.length === 5), '比較モードを入れると、B が A と同じ IP・同じ 5 ラウンドを再現する');
-  check(await ev(() => window.__stores.useSessionB.getState().rounds.every((r, i) => JSON.stringify(r.summary) === JSON.stringify(window.__stores.useSession.getState().rounds[i].summary))), '設定が同じなら B の結果は A と一致する（同じシード・同じ選択）');
-  check((await ev(() => document.querySelectorAll('.slot-label').length)) === 2, '中央が A と B の 2 画面に分かれる');
-  // B だけ「既定」プリセットにして適用 → A と違う結果になる
-  await ev(() => { const b = window.__stores.useSessionB.getState(); b.applyPreset('balanced'); });
-  await page.click('[data-testid=apply-b]');
-  for (let i = 0; i < 100; i++) { if (await ev(() => window.__stores.useSessionB.getState().rounds.length === 5 && !window.__stores.useSessionB.getState().busy)) break; await sleep(100); }
-  check(await ev(() => window.__stores.useSessionB.getState().rounds.length === 5 && !window.__stores.useSessionB.getState().error), 'B に設定を適用すると、B が A と同じ 5 ラウンドを再現する');
-  const differs = await ev(() => JSON.stringify(window.__stores.useSessionB.getState().rounds.map((r) => r.summary.cum_xact)) !== JSON.stringify(window.__stores.useSession.getState().rounds.map((r) => r.summary.cum_xact)));
-  check(differs, 'B だけ機構を有効にすると、A と結果が変わる');
-  // 両方に同じ操作: 発信・巻き戻し
+  // ---- 発信と巻き戻し ----
   await send(2);
-  check(await ev(() => window.__stores.useSession.getState().rounds.length === 6 && window.__stores.useSessionB.getState().rounds.length === 6), '発信は A と B の両方に届く');
+  check(await ev(() => window.__stores.useSession.getState().rounds.length === 6), '発信すると 6 ラウンドになる');
   await clickNode('[data-node-id="3"]');
-  check(await ev(() => window.__stores.useSession.getState().rounds.length === 3 && window.__stores.useSessionB.getState().rounds.length === 3), '巻き戻しも A と B の両方に適用される');
-  await page.screenshot({ path: process.env.SHOT_DIR ? `${process.env.SHOT_DIR}/p3_compare.png` : '/dev/null' });
+  check(await ev(() => window.__stores.useSession.getState().rounds.length === 3), 'ツリーのノードをクリックすると 3 ラウンドに巻き戻る');
+  check(await ev(() => { const r = window.__stores.useSession.getState().rounds; let c = 0; return r.every((x) => (c += x.summary.n_share) === x.summary.cum_share); }), 'cum_share が新規シェアの累積と一致する（巻き戻し後も）');
   check(errs.length === 0, `コンソールエラーなし ${errs.join(' | ')}`);
   await browser.close();
 } finally {

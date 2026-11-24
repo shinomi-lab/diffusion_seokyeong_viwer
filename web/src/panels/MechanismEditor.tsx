@@ -1,4 +1,4 @@
-// 拡張機構（M1）の編集（プリセットと、paramSpecs から自動生成したスライダー）。A・B のどちらのストアにも使う（F13）。
+// 拡張機構（M1）の編集（プリセットと、paramSpecs から自動生成したスライダー）。
 import { useMemo } from 'react';
 import { MECH_IDS, PRESET_LABELS, type MechId, type PresetName } from '../logic/config';
 import type { createSessionStore } from '../store/session';

@@ -21,11 +21,11 @@ export class SimClient {
     };
   }
 
-  call<K extends OpName>(op: K, args: Ops[K]['args'], transfer: Transferable[] = [], slot = 0): Promise<Ops[K]['res']> {
+  call<K extends OpName>(op: K, args: Ops[K]['args'], transfer: Transferable[] = []): Promise<Ops[K]['res']> {
     const id = this.nextId++;
     return new Promise((resolve, reject) => {
       this.pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
-      this.worker.postMessage({ id, slot, op, args } as Req, transfer);
+      this.worker.postMessage({ id, op, args } as Req, transfer);
     });
   }
 }

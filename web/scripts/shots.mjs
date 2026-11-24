@@ -1,4 +1,4 @@
-// 見た目の確認用スクリーンショット（通常/比較）と、再生中のフレーム時間。配色はダーク専用なので、OS がライトの状態をまねて撮り、ダークで出ることも確かめる。
+// 見た目の確認用スクリーンショットと、再生中のフレーム時間。配色はダーク専用なので、OS がライトの状態をまねて撮り、ダークで出ることも確かめる。
 //   実行: node scripts/shots.mjs OUT_DIR
 import { spawn } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
@@ -49,11 +49,6 @@ try {
     await ev(() => window.__stores.usePlayback.getState().skipToEnd());
     await waitIdle();
     await page.screenshot({ path: `${OUT}/web_${scheme}.png` });
-    const box = await page.evaluateHandle(() => [...document.querySelectorAll('label.check')].find((l) => l.textContent.includes('比較モード')));
-    await box.asElement().click();
-    await sleep(1500);
-    await waitIdle();
-    await page.screenshot({ path: `${OUT}/web_${scheme}_compare.png` });
     await page.close();
   }
   await browser.close();

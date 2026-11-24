@@ -5,8 +5,8 @@ import { aggregateSectors, ringCount, ringTotals } from '../logic/sectors';
 import { boundsOf } from '../logic/layout';
 import { useDisplay } from '../store/display';
 import { SPEEDS, usePlayback } from '../store/playback';
-import { recOn, useSession, useSessionB } from '../store/session';
-import { useView } from '../store/view';
+import { recOn, useSession } from '../store/session';
+import { useView, type PanelName } from '../store/view';
 import { hexToRgb, KIND_LABELS, T } from '../tokens';
 import { sim } from '../worker/client';
 import { fitCamera, toScreen, toWorld, zoomAt } from './camera';
@@ -18,9 +18,8 @@ import * as ov from './overlay';
 const MINI = 150;
 
 
-/** `slot`: 比較（F13）の A = 0 / B = 1。カメラ・選択・再生位置は共有し、状態（kinds）だけがスロットごとに違う。 */
-export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string }) {
-  const useS = slot === 1 ? useSessionB : useSession;
+export function NetworkView() {
+  const useS = useSession;
   const positions = useS((s) => s.positions);
   const dist = useS((s) => s.dist);
   const angle = useS((s) => s.angle);
@@ -38,7 +37,7 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
   const edgesTruncated = useView((s) => s.edgesTruncated);
   const view = useView.getState;
 
-  const display = useDisplay(slot);
+  const display = useDisplay();
   const playing = usePlayback((s) => s.playing);
 
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -118,7 +117,7 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
       return;
     }
     let cancel = false;
-    sim.call('edgesAmong', { nodes: drawNodes.slice(), cap: EDGE_CAP }, [], slot).then((e) => {
+    sim.call('edgesAmong', { nodes: drawNodes.slice(), cap: EDGE_CAP }).then((e) => {
       if (cancel) return;
       setEdges(e);
       useView.getState().setEdgesTruncated(e.length / 2 >= EDGE_CAP);
@@ -129,7 +128,7 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
   }, [mode, drawNodes]);
 
   // ---- 画像・録画のために、3 層のキャンバスを登録する（F15） ----
-  useEffect(() => registerLayers(slot, { base: baseRef.current, gl: glRef.current, over: overRef.current }), [slot]);
+  useEffect(() => registerLayers({ base: baseRef.current, gl: glRef.current, over: overRef.current }), []);
 
   // ---- WebGL ----
   useEffect(() => {
@@ -286,7 +285,7 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
       const step = (Math.PI * 2) / N_SECTORS;
       const nodes = await sim.call('selectNodes', {
         ringLo: ring, ringHi: ring, angLo: sector === null ? 0 : sector * step, angHi: sector === null ? 7 : (sector + 1) * step,
-      }, [], slot);
+      });
       useView.getState().expand(nodes, sector === null ? `${ring}ホップ` : `${ring}ホップ・扇形 ${sector + 1}`);
       useView.getState().setNotice(null);
     } catch (e) {
@@ -296,7 +295,7 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
 
   const expandUnreachable = useCallback(async () => {
     try {
-      const nodes = await sim.call('selectUnreachable', {}, [], slot);
+      const nodes = await sim.call('selectUnreachable', {});
       useView.getState().expand(nodes, '到達不能');
       useView.getState().setNotice(null);
     } catch (e) {
@@ -378,8 +377,7 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
   const hoverCell = hover && sectors ? sectors.subarray((hover.ring * N_SECTORS + hover.sector) * 5, (hover.ring * N_SECTORS + hover.sector) * 5 + 5) : null;
 
   return (
-      <div className="canvas-wrap" ref={wrapRef} data-slot={slot}>
-        {label && <div className="slot-label">{label}</div>}
+      <div className="canvas-wrap" ref={wrapRef}>
         <canvas ref={baseRef} className="layer" />
         <canvas ref={glRef} className="layer" />
         <canvas
@@ -433,7 +431,13 @@ export function NetworkView({ slot = 0, label }: { slot?: 0 | 1; label?: string 
   );
 }
 
-/** 凡例と再生の操作（A・B で共有）。 */
+const PANELS: [PanelName, string, string][] = [
+  ['left', '◧ 設定', '左の設定パネル（[）'],
+  ['right', '◨ ノード', '右のノード状態パネル（]）'],
+  ['bottom', '⬓ グラフ', '下のグラフと選んだ系列（\\）'],
+];
+
+/** 凡例と再生の操作（右端に、パネルの表示・非表示。ツールバーは混むのでここに置く）。 */
 export function PlayControls() {
   const intMode = useView((st) => st.intMode);
   const recMode = useView((st) => st.recMode);
@@ -441,10 +445,8 @@ export function PlayControls() {
   const k = usePlayback((st) => st.k);
   const last = usePlayback((st) => st.last);
   const speed = usePlayback((st) => st.speed);
-  // フックは毎回同じ順で両方呼ぶ（|| で短絡させない）
-  const recA = useSession(recOn);
-  const recB = useSessionB(recOn);
-  const rec = recA || recB;
+  const rec = useSession(recOn);
+  const hidden = useView((st) => st.hidden);
   const playback = usePlayback.getState();
   return (
       <div className="controls">
@@ -454,7 +456,6 @@ export function PlayControls() {
             <>
               <span className="legend-item"><i style={{ background: T.highlight.recommended, border: `2px solid ${T.highlight.recommended}`, borderRadius: '50%' }} />推薦で受信</span>
               <span className="legend-item"><i style={{ background: T.highlight.recommended, border: `2px solid ${T.kinds['2'].fill}`, borderRadius: '50%' }} />推薦・内部活性</span>
-              <span className="legend-item"><i style={{ background: T.highlight.recChain, borderRadius: '50%' }} />推薦由来</span>
             </>
           )}
         </div>
@@ -481,6 +482,11 @@ export function PlayControls() {
               </select>
             </label>
           )}
+          <div className="panel-toggles" role="group" aria-label="パネルの表示">
+            {PANELS.map(([name, label, title]) => (
+              <button key={name} aria-pressed={hidden[name]} title={`${title}を${hidden[name] ? '出す' : '隠す'}`} data-testid={`toggle-${name}`} onClick={() => useView.getState().togglePanel(name)}>{label}</button>
+            ))}
+          </div>
         </div>
       </div>
   );

@@ -26,7 +26,12 @@ input[type="checkbox"], input[type="radio"], input[type="range"] { accent-color:
 h1 { font-size: 15px; margin: 0; letter-spacing: 0.02em; } h3 { font-size: 13px; margin: 6px 0; } h4 { font-size: 12px; margin: 8px 0 2px; color: var(--muted); }
 
 /* 11.2: 最小 1280×720。ツールバー 48px / 操作パネル 280px / ノード詳細 340px / 下段 280px */
-.app { display: grid; height: 100%; min-width: 1280px; min-height: 720px; grid-template-columns: 280px 1fr 340px; grid-template-rows: 48px 1fr 280px; grid-template-areas: "tool tool tool" "ctrl net det" "ctrl bot bot"; }
+/* パネルを隠すと、その列・行が 0 になり、ネットワーク図がその方向へ広がる（隠すパネルは display: none。状態は保たれる） */
+.app { --w-ctrl: 280px; --w-det: 340px; --h-bot: 280px; display: grid; height: 100%; min-width: calc(var(--w-ctrl) + var(--w-det) + 660px); min-height: 720px; grid-template-columns: var(--w-ctrl) 1fr var(--w-det); grid-template-rows: 48px 1fr var(--h-bot); grid-template-areas: "tool tool tool" "ctrl net det" "ctrl bot bot"; }
+.app[data-hide-left] { --w-ctrl: 0px; } .app[data-hide-right] { --w-det: 0px; } .app[data-hide-bottom] { --h-bot: 0px; }
+.app[data-hide-left] .control, .app[data-hide-right] .detail, .app[data-hide-bottom] .bottom { display: none; }
+.panel-toggles { display: flex; gap: 2px; margin-left: auto; }
+.panel-toggles button[aria-pressed="true"] { background: var(--hover); color: var(--muted); }
 .toolbar { grid-area: tool; display: flex; align-items: center; gap: 16px; padding: 0 12px; border-bottom: 1px solid var(--line); background: var(--card); box-shadow: var(--shadow); position: relative; z-index: 3; }
 .toolbar .tools { display: flex; gap: 6px; align-items: center; flex: 1; }
 .toolbar .tools button, .toolbar .file-btn { background: transparent; border-color: transparent; }
@@ -101,14 +106,13 @@ table.mini { width: 100%; font-size: 11px; margin: 6px 0; font-variant-numeric: 
 .seq { font: 600 18px ui-monospace, "SF Mono", Menlo, monospace; letter-spacing: 3px; margin: 4px 0; }
 .chain { display: flex; flex-wrap: wrap; gap: 4px; }
 
-/* P3: 分岐ツリー・MC・比較 */
+/* P3: 分岐ツリー・MC */
 .tree-scroll { overflow: auto; max-height: 120px; border: 1px solid var(--line); border-radius: var(--r-card); background: var(--app); margin: 4px 0; }
 .tree-node { cursor: pointer; }
 .tree-node:hover circle { stroke: var(--warn); }
 .mc-row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
 .views { flex: 1; display: flex; gap: 2px; min-height: 0; min-width: 0; background: var(--line); }
 .views .canvas-wrap { flex: 1; min-width: 0; }
-.slot-label { position: absolute; top: 8px; right: 8px; z-index: 2; background: var(--accent); color: var(--on-accent); border-radius: 999px; padding: 0 10px; font-weight: 700; pointer-events: none; box-shadow: var(--shadow); }
 .plot-wrap { position: relative; }
 .plot-actions { position: absolute; top: -26px; right: 0; display: flex; gap: 4px; }
 .plot-actions button { padding: 0 6px; font-size: 11px; }

@@ -54,7 +54,7 @@ export function Toolbar() {
           }} />
         </label>
         <span className="sep" />
-        <button disabled={ip === null} title="ネットワーク図を PNG で保存（比較中は A と B を左右に並べる）" data-testid="network-png" onClick={() => void networkPng(bg()).then((b) => downloadBlob('network.png', b)).catch((e: Error) => useSession.setState({ error: e.message }))}>画像 (PNG)</button>
+        <button disabled={ip === null} title="ネットワーク図を PNG で保存" data-testid="network-png" onClick={() => void networkPng(bg()).then((b) => downloadBlob('network.png', b)).catch((e: Error) => useSession.setState({ error: e.message }))}>画像 (PNG)</button>
         <button disabled={!has || recording || !recordingSupported()} title="いまのラウンドの再生を WebM 動画に録画して保存" data-testid="record-webm" onClick={() => {
           setRecording(true);
           void recordPlayback(bg()).then((b) => downloadBlob('diffusion.webm', b)).catch((e: Error) => useSession.setState({ error: e.message })).finally(() => setRecording(false));

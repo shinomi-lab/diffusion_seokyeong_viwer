@@ -80,15 +80,9 @@ const choiceNum = (c: string) => parseInt(c, 16);
 export const recOn = (s: { scenario: ScenarioInfo | null }): boolean =>
   ((s.scenario?.config as { recommender?: { enabled?: boolean } } | undefined)?.recommender?.enabled ?? false) === true;
 
-/** 適用済みのシナリオで、推薦が on かつ方式が CF＋グラフか。 */
-export const recHybrid = (s: { scenario: ScenarioInfo | null }): boolean =>
-  recOn(s) && (s.scenario?.config as { recommender?: { method?: string } }).recommender?.method === 'hybrid';
-export const recWave = (s: { scenario: ScenarioInfo | null }): boolean =>
-  recOn(s) && (s.scenario?.config as { recommender?: { method?: string } }).recommender?.method === 'wave';
 
-/** 比較（F13）の A = スロット 0、B = スロット 1。スロットごとに別の Simulator（Worker 内）を使う。 */
-export function createSessionStore(slot: 0 | 1) {
-  const call = <K extends OpName>(op: K, args: Ops[K]['args']): Promise<Ops[K]['res']> => sim.call(op, args, [], slot);
+export function createSessionStore() {
+  const call = <K extends OpName>(op: K, args: Ops[K]['args']): Promise<Ops[K]['res']> => sim.call(op, args);
   return create<SessionState>((set, get) => {
   const run = async <T,>(f: () => Promise<T>): Promise<T | undefined> => {
     set({ busy: true, error: null });
@@ -304,8 +298,7 @@ export function createSessionStore(slot: 0 | 1) {
   });
 }
 
-export const useSession = createSessionStore(0);
-export const useSessionB = createSessionStore(1);
+export const useSession = createSessionStore();
 
 /** 編集中の設定が適用済みの設定と違うか。 */
 export function isDirty(s: Pick<SessionState, 'form' | 'appliedJson' | 'scenario'>): boolean {

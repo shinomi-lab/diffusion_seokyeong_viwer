@@ -41,6 +41,41 @@ export function UPlotChart({ data, series, bands, height = 150, xLabel, integerX
       height,
       legend: { show: true, live: false },
       cursor: { drag: { x: false, y: false } },
+      hooks: {
+        // 点にマウスを乗せたとき、いちばん近い系列の x（ラウンド）と y の値を出す（デスクトップ版と同じ）
+        init: [(u) => {
+          const tip = document.createElement('div');
+          tip.className = 'plot-tip';
+          Object.assign(tip.style, { position: 'absolute', display: 'none', pointerEvents: 'none', zIndex: '10', padding: '2px 6px', borderRadius: '4px', font: AXIS_FONT, whiteSpace: 'nowrap', background: T.chrome.card, color: css.getPropertyValue('--fg').trim() || '#1B2330', border: `1px solid ${grid}` });
+          u.over.appendChild(tip);
+        }],
+        setCursor: [(u) => {
+          const tip = u.over.querySelector<HTMLDivElement>('.plot-tip');
+          if (!tip) return;
+          const { idx, left, top } = u.cursor;
+          let best = -1;
+          let bestD = Infinity;
+          if (idx != null && top != null && top >= 0) {
+            u.series.forEach((s, i) => {
+              if (i === 0 || !s.show || s.width === 0) return;
+              const v = u.data[i][idx];
+              if (v == null || Number.isNaN(v)) return;
+              const d = Math.abs(u.valToPos(v, 'y') - top);
+              if (d < bestD) { bestD = d; best = i; }
+            });
+          }
+          if (best < 0 || bestD > 24 || idx == null || left == null || top == null) { tip.style.display = 'none'; return; }
+          const v = u.data[best][idx] as number;
+          const fmt = Number.isInteger(v) ? String(v) : v.toPrecision(4);
+          tip.textContent = `${xLabel ?? 'x'} ${u.data[0][idx]}、${u.series[best].label}: ${fmt}`;
+          tip.style.display = 'block';
+          const x = u.valToPos(u.data[0][idx] as number, 'x');
+          const y = u.valToPos(v, 'y');
+          const flip = x + tip.offsetWidth + 12 > u.over.clientWidth;
+          tip.style.left = `${flip ? x - tip.offsetWidth - 8 : x + 8}px`;
+          tip.style.top = `${Math.max(0, y - 24)}px`;
+        }],
+      },
       scales: { x: { time: false }, y: { range: (_u, min, max) => {
         // 自動で広げる（余白を足すだけで、上限・下限は付けない）
         if (!isFinite(min) || !isFinite(max)) return [0, 1];

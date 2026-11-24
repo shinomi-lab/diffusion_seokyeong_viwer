@@ -71,21 +71,25 @@ describe.skipIf(!have)('sim-wasm との照合（100random.txt）', () => {
     // 推薦の既定（off）と登録簿の既定が Rust 側と一致する
     expect(setup('off').info.config.recommender).toEqual(DEFAULT_REC);
     const recSpecs: ParamSpec[] = JSON.parse(new Simulator().recParamSpecs());
-    for (const p of recSpecs) expect(p.default).toBe(DEFAULT_REC[p.id.split('.')[1] as 'threshold']);
-    // 方式のキーが無い記録は基準として読む（Rust・画面とも。T-V08）
+    for (const p of recSpecs) expect(p.default).toBe(DEFAULT_REC[p.id.split('.')[1] as 'eps']);
+    // 廃止した方式（v1 基準・v2 CF＋グラフ）の記録は推薦なしとして読む（Rust・画面とも。2026-10-27）
     const s2 = new Simulator();
     s2.loadGraph(GRAPH, JSON.stringify({ format: 'edgelist', directed: true, transposed: false }));
-    const legacy = { recommender: { enabled: true, threshold: 0.05 } };
-    expect(JSON.parse(s2.createScenario(JSON.stringify(legacy))).config.recommender.method).toBe('baseline');
-    expect(formFromConfig(defaultForm(specs), legacy).recommender.method).toBe('baseline');
-    expect(formFromConfig(defaultForm(specs), {}).recommender.method).toBe('hybrid');
-    // Rモデル（T-W08）: 新しいキーが無い記録は既定値で埋まり、方式は変わらない。wave は Rust でも読める
-    const v2 = { recommender: { enabled: true, method: 'hybrid' } };
-    const f2 = formFromConfig(defaultForm(specs), v2).recommender;
-    expect([f2.method, f2.eps, f2.near, f2.mu]).toEqual(['hybrid', DEFAULT_REC.eps, DEFAULT_REC.near, DEFAULT_REC.mu]);
-    const wave = { recommender: { enabled: true, method: 'wave', eps: 0.5 } };
-    const c3 = JSON.parse(s2.createScenario(JSON.stringify(wave))).config.recommender;
-    expect([c3.method, c3.eps, c3.delta]).toEqual(['wave', 0.5, 1.0]);
+    for (const legacy of [
+      { recommender: { enabled: true, threshold: 0.05 } },
+      { recommender: { enabled: true, method: 'hybrid', threshold: 0.2, alpha: 0.25 } },
+      { recommender: { enabled: true, method: 'baseline', eps: 1.0 } },
+    ]) {
+      expect(JSON.parse(s2.createScenario(JSON.stringify(legacy))).config.recommender.enabled).toBe(false);
+      expect(formFromConfig(defaultForm(specs), legacy).recommender.enabled).toBe(false);
+    }
+    expect(formFromConfig(defaultForm(specs), {}).recommender).toEqual(DEFAULT_REC);
+    // 現在の形式（method なし・eps あり）と v3 で保存した記録（method = "wave"）は on のまま読む。古いキーは捨てる
+    for (const cur of [{ enabled: true, eps: 0.5 }, { enabled: true, method: 'wave', eps: 0.5, threshold: 0.3 }]) {
+      const c3 = JSON.parse(s2.createScenario(JSON.stringify({ recommender: cur }))).config.recommender;
+      expect([c3.enabled, c3.eps, c3.delta, 'method' in c3]).toEqual([true, 0.5, 1.0, false]);
+      expect(formFromConfig(defaultForm(specs), { recommender: cur }).recommender).toEqual({ ...DEFAULT_REC, enabled: true, eps: 0.5 });
+    }
     s2.setIp(0);
     s2.step(0);
     expect(JSON.parse(s2.recWaveTrace()).trace.length).toBeGreaterThan(0);
